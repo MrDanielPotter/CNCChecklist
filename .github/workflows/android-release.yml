@@ -744,7 +744,24 @@ jobs:
           echo "Build type: $BUILD_TYPE" | tee -a logs/buildozer_build.log
           echo "Using command: buildozer -v android $BUILD_TYPE" | tee -a logs/buildozer_build.log
           
+          # Попробуем инициализацию buildozer сначала
+          echo "== Initializing buildozer ==" | tee -a logs/buildozer_build.log
+          buildozer init 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer init failed (may already exist)" | tee -a logs/buildozer_build.log
+          
+          # Проверяем, что buildozer создал необходимые файлы
+          echo "== Checking buildozer initialization ==" | tee -a logs/buildozer_build.log
+          ls -la .buildozer/ 2>&1 | tee -a logs/buildozer_build.log || echo ".buildozer directory not found" | tee -a logs/buildozer_build.log
+          
+          # Проверяем содержимое .buildozer директории
+          echo "== Checking .buildozer contents ==" | tee -a logs/buildozer_build.log
+          find .buildozer -type f -name "*.py" -o -name "*.json" -o -name "*.txt" 2>/dev/null | head -20 | tee -a logs/buildozer_build.log || echo "No buildozer files found" | tee -a logs/buildozer_build.log
+          
+          # Проверяем, что buildozer может найти все необходимые компоненты после инициализации
+          echo "== Re-checking buildozer SDK detection after init ==" | tee -a logs/buildozer_build.log
+          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after init" | tee -a logs/buildozer_build.log
+          
           # Попробуем сначала простую команду
+          echo "== Attempting buildozer build ==" | tee -a logs/buildozer_build.log
           if buildozer android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
           else
@@ -789,6 +806,16 @@ jobs:
             find . -name "*.apk" -o -name "*.aab" 2>/dev/null | tee -a logs/summary.txt || echo "No APK/AAB files found anywhere" | tee -a logs/summary.txt
             echo "Checking .buildozer directory..." | tee -a logs/summary.txt
             ls -la .buildozer/ 2>/dev/null | tee -a logs/summary.txt || echo ".buildozer directory not found" | tee -a logs/summary.txt
+            
+            # Дополнительная диагностика
+            echo "== Additional diagnostics ==" | tee -a logs/summary.txt
+            echo "Checking .buildozer/android directory:" | tee -a logs/summary.txt
+            ls -la .buildozer/android/ 2>&1 | tee -a logs/summary.txt || echo ".buildozer/android directory not found" | tee -a logs/summary.txt
+            echo "Checking for gradle files:" | tee -a logs/summary.txt
+            find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | tee -a logs/summary.txt || echo "No gradle files found" | tee -a logs/summary.txt
+            echo "Checking for Android project structure:" | tee -a logs/summary.txt
+            find . -name "AndroidManifest.xml" -o -name "build.gradle" 2>/dev/null | tee -a logs/summary.txt || echo "No Android project files found" | tee -a logs/summary.txt
+            
             echo "Last 100 lines of build log for debugging:" | tee -a logs/summary.txt
             tail -100 logs/buildozer_build.log | tee -a logs/summary.txt
             echo "bin directory contents:" | tee -a logs/summary.txt
