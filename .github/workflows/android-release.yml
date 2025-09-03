@@ -760,8 +760,28 @@ jobs:
           echo "== Re-checking buildozer SDK detection after init ==" | tee -a logs/buildozer_build.log
           buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after init" | tee -a logs/buildozer_build.log
           
+          # Попробуем принудительно создать Android проект
+          echo "== Forcing Android project creation ==" | tee -a logs/buildozer_build.log
+          buildozer android update 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android update failed" | tee -a logs/buildozer_build.log
+          
+          # Проверяем, что Android проект создан
+          echo "== Checking Android project creation ==" | tee -a logs/buildozer_build.log
+          ls -la .buildozer/android/ 2>&1 | tee -a logs/buildozer_build.log || echo ".buildozer/android directory not found" | tee -a logs/buildozer_build.log
+          
+          # Проверяем содержимое Android проекта
+          echo "== Checking Android project contents ==" | tee -a logs/buildozer_build.log
+          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" -o -name "AndroidManifest.xml" 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Android project files found" | tee -a logs/buildozer_build.log
+          
+          # Проверяем, что buildozer может найти все необходимые компоненты после создания Android проекта
+          echo "== Final buildozer SDK detection check ==" | tee -a logs/buildozer_build.log
+          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after project creation" | tee -a logs/buildozer_build.log
+          
           # Попробуем сначала простую команду
           echo "== Attempting buildozer build ==" | tee -a logs/buildozer_build.log
+          echo "Current working directory: $(pwd)" | tee -a logs/buildozer_build.log
+          echo "Files in current directory:" | tee -a logs/buildozer_build.log
+          ls -la | tee -a logs/buildozer_build.log
+          
           if buildozer android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
           else
