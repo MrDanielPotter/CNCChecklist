@@ -65,7 +65,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '11'
-          cache: 'gradle'
 
       - name: Verify Java 11 setup
         run: |
@@ -594,7 +593,9 @@ jobs:
           ANDROIDMINAPI: ${{ env.ANDROIDMINAPI }}
           LIBFFI_CFLAGS: ${{ env.LIBFFI_CFLAGS }}
           LIBFFI_LIBS: ${{ env.LIBFFI_LIBS }}
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2g -Dkotlin.daemon.jvm.options=-Xmx512m"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2g -Dkotlin.daemon.jvm.options=-Xmx512m -Dorg.gradle.caching=false -Dorg.gradle.daemon=false"
+          GRADLE_USER_HOME: "/tmp/gradle-cache"
+          GRADLE_DAEMON_OPTS: "-Dorg.gradle.daemon=false"
           AUTOCONF_VERSION: ${{ env.AUTOCONF_VERSION }}
           AUTOMAKE_VERSION: ${{ env.AUTOMAKE_VERSION }}
           LT_SYS_SYMBOL_USCORE: ${{ env.LT_SYS_SYMBOL_USCORE }}
@@ -864,6 +865,10 @@ jobs:
           
           # Проверяем результат сборки
           echo "== Checking build results ==" | tee -a logs/summary.txt
+          echo "Current working directory: $(pwd)" | tee -a logs/summary.txt
+          echo "Directory contents:" | tee -a logs/summary.txt
+          ls -la | tee -a logs/summary.txt
+          
           if [ -d "bin" ] && [ "$(ls -A bin 2>/dev/null)" ]; then
             echo "APK build: SUCCESS - files found in bin/" | tee -a logs/summary.txt
             ls -la bin/ | tee -a logs/summary.txt
@@ -896,6 +901,14 @@ jobs:
             find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | tee -a logs/summary.txt || echo "No gradle files found" | tee -a logs/summary.txt
             echo "Checking for Android project structure:" | tee -a logs/summary.txt
             find . -name "AndroidManifest.xml" -o -name "build.gradle" 2>/dev/null | tee -a logs/summary.txt || echo "No Android project files found" | tee -a logs/summary.txt
+            
+            # Проверяем, что buildozer действительно запустился
+            echo "Checking if buildozer process completed:" | tee -a logs/summary.txt
+            if grep -q "Buildozer command completed successfully" logs/buildozer_build.log; then
+              echo "Buildozer reported success but no APK found" | tee -a logs/summary.txt
+            else
+              echo "Buildozer did not report success" | tee -a logs/summary.txt
+            fi
             
             echo "Last 100 lines of build log for debugging:" | tee -a logs/summary.txt
             tail -100 logs/buildozer_build.log | tee -a logs/summary.txt
@@ -947,6 +960,8 @@ jobs:
           path: |
             bin/*.apk
             bin/*.aab
+            .buildozer/android/platform/build-*/dist/*.apk
+            .buildozer/android/platform/build-*/dist/*.aab
           if-no-files-found: warn
           retention-days: 30
 
