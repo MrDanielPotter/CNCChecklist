@@ -19,27 +19,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Java 17 требуется для последних commandline-tools/sdkmanager (class file version 61)
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Set up Java 11 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '11'
-
-      - name: Install system deps
+      - name: Install system deps (Ubuntu 24.04)
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip libstdc++6 libffi-dev libssl-dev zlib1g-dev libncurses6 libtinfo6
+          sudo apt-get install -y \
+            git zip unzip \
+            libstdc++6 libffi-dev libssl-dev zlib1g-dev \
+            libncurses6 libtinfo6
 
-      - name: Create SDK/NDK dirs
+      - name: Prepare SDK/NDK folders
         run: |
           mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME"
 
-      - name: Install Android cmdline-tools
+      - name: Install Android commandline-tools (latest)
         run: |
           cd "$ANDROID_HOME"
           curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdtools.zip
@@ -47,20 +51,31 @@ jobs:
           unzip -q cmdtools.zip -d cmdline-tools-tmp
           mv cmdline-tools-tmp/cmdline-tools cmdline-tools/latest
           rm -rf cmdline-tools-tmp cmdtools.zip
-          echo "sdkmanager location:"
-          ls -la "$ANDROID_HOME/cmdline-tools/latest/bin"
-          echo "java -version:"; java -version || true
-          echo "CLASSPATH=$CLASSPATH"
+          echo "sdkmanager at: $ANDROID_HOME/cmdline-tools/latest/bin"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version || true
+          java -version || true
 
-      - name: Install Android SDK packages
+      - name: Accept licenses & install SDK/NDK (needs Java 17)
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.2.9519653"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;34.0.0" \
+            "ndk;25.2.9519653"
           ln -s "$ANDROID_HOME/ndk/25.2.9519653" "$ANDROID_NDK_HOME"
+          # удалить возможный битый симлинк 36.1.0-rc1, если внезапно появится
           if [ -L "$ANDROID_HOME/build-tools/36.1.0-rc1" ]; then rm -f "$ANDROID_HOME/build-tools/36.1.0-rc1"; fi
           test -f "$ANDROID_HOME/cmdline-tools/latest/lib/sdkmanager.jar" && echo "sdkmanager.jar OK"
 
-      - name: Set up pip & buildozer
+      # (Опционально можно переключиться на Java 11 для p4a/buildozer, но как правило Java 17 тоже работает)
+      # - name: Switch to Java 11 (Temurin) for Buildozer (optional)
+      #   uses: actions/setup-java@v4
+      #   with:
+      #     distribution: 'temurin'
+      #     java-version: '11'
+
+      - name: Install buildozer & Python deps
         run: |
           python -m pip install --upgrade pip wheel setuptools cython
           python -m pip install buildozer==1.5.0
@@ -68,18 +83,15 @@ jobs:
       - name: Download DejaVuSans.ttf (for Cyrillic PDF)
         run: |
           mkdir -p app/assets/fonts
-          curl -L "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf" -o app/assets/fonts/DejaVuSans.ttf
+          curl -sSL "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf" -o app/assets/fonts/DejaVuSans.ttf
           ls -lh app/assets/fonts
 
-      - name: Build debug APK (no keystore)
+      - name: Build debug APK
         run: |
           buildozer android debug
 
-      - name: Find APKs
-        id: findapk
+      - name: List build outputs
         run: |
-          echo "apk_path=$(ls -1 bin/*.apk | head -n1)" >> $GITHUB_OUTPUT || true
-          echo "aab_path=$(ls -1 bin/*.aab | head -n1)" >> $GITHUB_OUTPUT || true
           ls -la bin || true
 
       - name: Upload artifacts
@@ -90,4 +102,3 @@ jobs:
             bin/*.apk
             bin/*.aab
           if-no-files-found: warn
-
