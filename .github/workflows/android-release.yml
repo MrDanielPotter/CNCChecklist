@@ -25,9 +25,11 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       P4A_DEBUG: "1"
       # Стабильные версии Android SDK (соответствуют buildozer.spec)
-      ANDROID_PLATFORM: "android-33"
+      ANDROID_PLATFORM: "android-12"
       ANDROID_BUILD_TOOLS: "34.0.0"
       ANDROID_NDK_VERSION: "25.2.9519653"
+      ANDROIDAPI: "32"
+      ANDROIDMINAPI: "32"
 
     steps:
       - name: Checkout
@@ -481,6 +483,8 @@ jobs:
           ANDROID_PLATFORM: ${{ env.ANDROID_PLATFORM }}
           ANDROID_BUILD_TOOLS: ${{ env.ANDROID_BUILD_TOOLS }}
           ANDROID_NDK_VERSION: ${{ env.ANDROID_NDK_VERSION }}
+          ANDROIDAPI: ${{ env.ANDROIDAPI }}
+          ANDROIDMINAPI: ${{ env.ANDROIDMINAPI }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -526,6 +530,8 @@ jobs:
             sed -i "s/android\.platform = .*/android.platform = $ANDROID_PLATFORM/" buildozer.spec
             sed -i "s/android\.build_tools = .*/android.build_tools = $ANDROID_BUILD_TOOLS/" buildozer.spec
             sed -i "s/android\.ndk = .*/android.ndk = $ANDROID_NDK_VERSION/" buildozer.spec
+            sed -i "s/android\.api = .*/android.api = $ANDROIDAPI/" buildozer.spec
+            sed -i "s/android\.minapi = .*/android.minapi = $ANDROIDMINAPI/" buildozer.spec
             
             echo "Updated buildozer.spec with actual versions and paths" | tee -a logs/buildozer_build.log
             echo "Updated android.sdk_dir to: $ANDROID_HOME" | tee -a logs/buildozer_build.log
@@ -533,6 +539,8 @@ jobs:
             echo "Updated android.platform to: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
             echo "Updated android.build_tools to: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
             echo "Updated android.ndk to: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
+            echo "Updated android.api to: $ANDROIDAPI" | tee -a logs/buildozer_build.log
+            echo "Updated android.minapi to: $ANDROIDMINAPI" | tee -a logs/buildozer_build.log
           fi
           
           # Создаем символические ссылки для buildozer
@@ -664,11 +672,10 @@ jobs:
         with:
           name: cnc-checklist-v1.3-ci-logs
           path: |
-            logs/** 
+            logs/**
             .buildozer/**/*.log
             .buildozer/**/build*.txt
             .buildozer/android/platform/python-for-android/*.log
           if-no-files-found: warn
           retention-days: 7
 
-          
