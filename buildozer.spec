@@ -1,94 +1,42 @@
-name: Build Android APK
+[app]
+title = CNC Checklist
+package.name = cncchecklist
+package.domain = com.cnc.checklist
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+# исходники
+source.dir = .
+source.include_exts = py,kv,jpg,png,ttf
 
-jobs:
-  build-apk:
-    runs-on: ubuntu-latest
+# версия приложения
+version = 1.3
 
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
-      PIP_DISABLE_PIP_VERSION_CHECK: 1
+# ориентация
+orientation = landscape
+fullscreen = 0
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+# зависимости (python-for-android)
+requirements = python3,kivy==2.3.0,pillow,reportlab,androidstorage4kivy,plyer,openssl
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+# разрешения Android 13+
+android.permissions = INTERNET, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED
 
-      - name: Set up Java 11 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '11'
+# целевая/минимальная платформа
+android.api = 33
+android.minapi = 33
+android.arch = arm64-v8a
 
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git zip unzip libstdc++6 libffi-dev libssl-dev zlib1g-dev libncurses5 libncurses5-dev libtinfo5
+# опционально: логи Kivy
+# android.logcat_filters = *:S python:D
 
-      - name: Create SDK/NDK dirs
-        run: |
-          mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME"
+[buildozer]
+# Пути берём из переменных окружения CI
+android.sdk_dir = %(ANDROID_HOME)s
+android.ndk_dir = %(ANDROID_NDK_HOME)s
+android.build_tools = 34.0.0
+log_level = 2
+bin_dir = bin
 
-      - name: Install Android cmdline-tools
-        run: |
-          cd "$ANDROID_HOME"
-          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdtools.zip
-          mkdir -p cmdline-tools
-          unzip -q cmdtools.zip -d cmdline-tools-tmp
-          mv cmdline-tools-tmp/cmdline-tools cmdline-tools/latest
-          rm -rf cmdline-tools-tmp cmdtools.zip
-          echo "sdkmanager location:"
-          ls -la "$ANDROID_HOME/cmdline-tools/latest/bin"
-          echo "java -version:"; java -version || true
-          echo "CLASSPATH=$CLASSPATH"
-
-      - name: Install Android SDK packages
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.2.9519653"
-          ln -s "$ANDROID_HOME/ndk/25.2.9519653" "$ANDROID_NDK_HOME"
-          # удалить проблемный симлинк 36.1.0-rc1, если вдруг появится
-          if [ -L "$ANDROID_HOME/build-tools/36.1.0-rc1" ]; then rm -f "$ANDROID_HOME/build-tools/36.1.0-rc1"; fi
-          # проверить sdkmanager.jar
-          test -f "$ANDROID_HOME/cmdline-tools/latest/lib/sdkmanager.jar" && echo "sdkmanager.jar OK"
-
-      - name: Set up pip & buildozer
-        run: |
-          python -m pip install --upgrade pip wheel setuptools cython
-          python -m pip install buildozer==1.5.0
-
-      - name: Download DejaVuSans.ttf (for Cyrillic PDF)
-        run: |
-          mkdir -p app/assets/fonts
-          curl -L "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf" -o app/assets/fonts/DejaVuSans.ttf
-          ls -lh app/assets/fonts
-
-      - name: Build debug APK (no keystore)
-        run: |
-          buildozer android debug
-
-      - name: Find APKs
-        id: findapk
-        run: |
-          echo "apk_path=$(ls -1 bin/*.apk | head -n1)" >> $GITHUB_OUTPUT || true
-          echo "aab_path=$(ls -1 bin/*.aab | head -n1)" >> $GITHUB_OUTPUT || true
-          ls -la bin || true
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cnc-checklist-apk
-          path: |
-            bin/*.apk
-            bin/*.aab
-          if-no-files-found: warn
+[android]
+# ускорение и стабильность сборки
+accept_sdk_license = True
+p4a.branch = master
