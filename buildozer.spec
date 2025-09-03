@@ -28,7 +28,7 @@ android.permissions = INTERNET, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USE
 
 # целевая/минимальная платформа
 android.api = 32
-android.minapi = 32
+android.minapi = 26
 android.archs = arm64-v8a
 
 # опционально: логи Kivy
@@ -48,4 +48,7 @@ p4a.branch = master
 # Стабильные версии Android SDK
 android.platform = android-32
 android.build_tools = 34.0.0
-android.ndk = 25.2.9519653
+android.ndk = 25b
+# Пути к SDK и NDK
+android.sdk_dir = /home/runner/work/CNCChecklist/CNCChecklist/android-sdk
+android.ndk_dir = /home/runner/work/CNCChecklist/CNCChecklist/android-ndk
