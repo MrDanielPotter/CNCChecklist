@@ -547,8 +547,32 @@ jobs:
           ln -sf "$ANDROID_HOME/ndk" "$BUILDIZER_SDK_DIR/ndk" || true
           ln -sf "$ANDROID_HOME/cmdline-tools" "$BUILDIZER_SDK_DIR/cmdline-tools" || true
           
+          # Создаем старую структуру tools для совместимости с buildozer
+          mkdir -p "$BUILDIZER_SDK_DIR/tools/bin"
+          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$BUILDIZER_SDK_DIR/tools/bin/sdkmanager" || true
+          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" "$BUILDIZER_SDK_DIR/tools/bin/avdmanager" || true
+          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" "$BUILDIZER_SDK_DIR/tools/bin/apkanalyzer" || true
+          
           echo "Created symlinks in $BUILDIZER_SDK_DIR" | tee -a logs/buildozer_build.log
           ls -la "$BUILDIZER_SDK_DIR" | tee -a logs/buildozer_build.log
+          
+          # Проверяем доступность sdkmanager
+          echo "== Checking sdkmanager availability ==" | tee -a logs/buildozer_build.log
+          if [ -f "$BUILDIZER_SDK_DIR/tools/bin/sdkmanager" ]; then
+            echo "✅ sdkmanager found at: $BUILDIZER_SDK_DIR/tools/bin/sdkmanager" | tee -a logs/buildozer_build.log
+            "$BUILDIZER_SDK_DIR/tools/bin/sdkmanager" --version | tee -a logs/buildozer_build.log || true
+          else
+            echo "❌ sdkmanager not found at expected location" | tee -a logs/buildozer_build.log
+          fi
+          
+          # Проверяем aidl
+          echo "== Checking aidl availability ==" | tee -a logs/buildozer_build.log
+          AIDL_PATH=$(find "$BUILDIZER_SDK_DIR" -name "aidl" -type f 2>/dev/null | head -1 || echo "")
+          if [ -n "$AIDL_PATH" ]; then
+            echo "✅ aidl found at: $AIDL_PATH" | tee -a logs/buildozer_build.log
+          else
+            echo "❌ aidl not found in buildozer SDK directory" | tee -a logs/buildozer_build.log
+          fi
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
