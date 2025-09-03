@@ -299,6 +299,10 @@ jobs:
           " | tee -a logs/summary.txt
 
       - name: Build APK (verbose, logged)
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -307,15 +311,59 @@ jobs:
           BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
           echo "Building $BUILD_TYPE APK..." | tee -a logs/summary.txt
           
+          # Проверяем окружение перед сборкой
+          echo "== Pre-build environment check ==" | tee -a logs/buildozer_build.log
+          echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
+          echo "Current directory: $(pwd)" | tee -a logs/buildozer_build.log
+          echo "Python version: $(python --version)" | tee -a logs/buildozer_build.log
+          echo "Buildozer version: $(buildozer --version)" | tee -a logs/buildozer_build.log
+          
+          # Проверяем наличие buildozer.spec
+          if [ ! -f "buildozer.spec" ]; then
+            echo "ERROR: buildozer.spec not found!" | tee -a logs/buildozer_build.log
+            exit 1
+          fi
+          
+          # Очищаем предыдущие сборки и создаем папку bin
+          rm -rf bin .buildozer
+          mkdir -p bin
+          
           # Сборка с детальным логированием
-          ( set -x; buildozer -v android $BUILD_TYPE ) 2>&1 | tee logs/buildozer_build.log
+          echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
+          if buildozer -v android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
+            echo "Buildozer command completed successfully" | tee -a logs/summary.txt
+          else
+            BUILD_EXIT_CODE=$?
+            echo "Buildozer command failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
+            echo "Last 50 lines of build log:" | tee -a logs/summary.txt
+            tail -50 logs/buildozer_build.log | tee -a logs/summary.txt
+            exit $BUILD_EXIT_CODE
+          fi
           
           # Проверяем результат сборки
-          if [ -f "bin/*.apk" ]; then
-            echo "APK build: SUCCESS" | tee -a logs/summary.txt
-            ls -la bin/*.apk | tee -a logs/summary.txt
+          echo "== Checking build results ==" | tee -a logs/summary.txt
+          if [ -d "bin" ] && [ "$(ls -A bin 2>/dev/null)" ]; then
+            echo "APK build: SUCCESS - files found in bin/" | tee -a logs/summary.txt
+            ls -la bin/ | tee -a logs/summary.txt
+            
+            # Проверяем конкретные файлы
+            APK_FILES=$(find bin -name "*.apk" 2>/dev/null || true)
+            AAB_FILES=$(find bin -name "*.aab" 2>/dev/null || true)
+            
+            if [ -n "$APK_FILES" ]; then
+              echo "APK files found:" | tee -a logs/summary.txt
+              echo "$APK_FILES" | tee -a logs/summary.txt
+            fi
+            
+            if [ -n "$AAB_FILES" ]; then
+              echo "AAB files found:" | tee -a logs/summary.txt
+              echo "$AAB_FILES" | tee -a logs/summary.txt
+            fi
           else
-            echo "APK build: FAILED - no APK files found" | tee -a logs/summary.txt
+            echo "APK build: FAILED - no files found in bin/" | tee -a logs/summary.txt
+            echo "bin directory contents:" | tee -a logs/summary.txt
+            ls -la bin/ 2>/dev/null | tee -a logs/summary.txt || echo "bin directory does not exist" | tee -a logs/summary.txt
             exit 1
           fi
 
