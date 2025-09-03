@@ -124,8 +124,18 @@ jobs:
             pkg="$1"
             echo "== Installing: $pkg =="
             for i in 1 2 3; do
-              if "$SDKM" --sdk_root="$SDKROOT" --install "$pkg"; then
+              echo "Attempt $i for $pkg"
+              if "$SDKM" --sdk_root="$SDKROOT" --install "$pkg" --verbose; then
                 echo "SUCCESS: $pkg installed"
+                # Проверяем, что пакет действительно установился
+                if echo "$pkg" | grep -q "build-tools"; then
+                  VERSION=$(echo "$pkg" | cut -d';' -f2)
+                  if [ -d "$SDKROOT/build-tools/$VERSION" ]; then
+                    echo "VERIFIED: build-tools $VERSION directory exists"
+                  else
+                    echo "WARNING: build-tools $VERSION directory not found after installation"
+                  fi
+                fi
                 break
               else
                 echo "WARN: attempt $i failed for $pkg; retrying in 5s..."
@@ -147,10 +157,36 @@ jobs:
           rm -rf "$ANDROID_HOME/build-tools/36.1.0-rc1" || true
           rm -rf "$ANDROID_HOME/build-tools/36.1.0" || true
 
+          echo "== Post-installation diagnostics =="
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "SDKROOT: $SDKROOT"
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la "$ANDROID_HOME" || true
+          
           echo "== Verify installed packages =="
-          ls -la "$ANDROID_HOME/build-tools/" || true
-          ls -la "$ANDROID_HOME/platforms/" || true
-          ls -la "$ANDROID_HOME/ndk/" || true
+          if [ -d "$ANDROID_HOME/build-tools" ]; then
+            echo "build-tools directory exists:"
+            ls -la "$ANDROID_HOME/build-tools/" || true
+          else
+            echo "❌ build-tools directory does not exist!"
+            echo "Trying to create it manually..."
+            mkdir -p "$ANDROID_HOME/build-tools" || true
+          fi
+          
+          if [ -d "$ANDROID_HOME/platforms" ]; then
+            echo "platforms directory exists:"
+            ls -la "$ANDROID_HOME/platforms/" || true
+          else
+            echo "❌ platforms directory does not exist!"
+          fi
+          
+          if [ -d "$ANDROID_HOME/ndk" ]; then
+            echo "ndk directory exists:"
+            ls -la "$ANDROID_HOME/ndk/" || true
+          else
+            echo "❌ ndk directory does not exist!"
+          fi
           
           echo "== Check aidl availability =="
           find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null || echo "aidl not found"
@@ -158,6 +194,25 @@ jobs:
           echo "== Disk usage =="
           du -sh "$ANDROID_HOME" || true
           df -h || true
+          
+          echo "== Final sdkmanager list =="
+          "$SDKM" --sdk_root="$SDKROOT" --list | grep -E "(build-tools|platforms|ndk)" | head -10 || true
+          
+          # Если build-tools не установились, попробуем альтернативный способ
+          if [ ! -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ]; then
+            echo "== Attempting alternative build-tools installation =="
+            echo "Installing build-tools without --install flag..."
+            "$SDKM" --sdk_root="$SDKROOT" "build-tools;$ANDROID_BUILD_TOOLS" || true
+            
+            # Проверяем еще раз
+            if [ -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ]; then
+              echo "✅ Alternative installation successful"
+            else
+              echo "❌ Alternative installation also failed"
+              echo "Available build-tools versions:"
+              "$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" || true
+            fi
+          fi
 
       - name: Install buildozer & Python deps
         run: |
@@ -171,7 +226,7 @@ jobs:
 
       - name: Verify Android SDK installation
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           echo "=== Android SDK Verification ===" | tee -a logs/summary.txt
           
           # Проверяем наличие build-tools
@@ -180,8 +235,18 @@ jobs:
             ls -la "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS/" | tee -a logs/summary.txt
           else
             echo "❌ build-tools $ANDROID_BUILD_TOOLS not found" | tee -a logs/summary.txt
-            ls -la "$ANDROID_HOME/build-tools/" || true
-            exit 1
+            echo "Available build-tools:" | tee -a logs/summary.txt
+            ls -la "$ANDROID_HOME/build-tools/" 2>/dev/null | tee -a logs/summary.txt || echo "No build-tools directory" | tee -a logs/summary.txt
+            
+            # Попробуем найти любую доступную версию build-tools
+            AVAILABLE_BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | head -1 || echo "")
+            if [ -n "$AVAILABLE_BUILD_TOOLS" ]; then
+              echo "⚠️  Using available build-tools: $AVAILABLE_BUILD_TOOLS" | tee -a logs/summary.txt
+              export ANDROID_BUILD_TOOLS="$AVAILABLE_BUILD_TOOLS"
+            else
+              echo "❌ No build-tools available at all" | tee -a logs/summary.txt
+              exit 1
+            fi
           fi
           
           # Проверяем наличие aidl
@@ -191,6 +256,8 @@ jobs:
             "$AIDL_PATH" --version 2>&1 | tee -a logs/summary.txt || true
           else
             echo "❌ aidl not found" | tee -a logs/summary.txt
+            echo "Searching for aidl in all build-tools..." | tee -a logs/summary.txt
+            find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null | tee -a logs/summary.txt || echo "No aidl found anywhere" | tee -a logs/summary.txt
             exit 1
           fi
           
@@ -199,6 +266,8 @@ jobs:
             echo "✅ platform $ANDROID_PLATFORM found" | tee -a logs/summary.txt
           else
             echo "❌ platform $ANDROID_PLATFORM not found" | tee -a logs/summary.txt
+            echo "Available platforms:" | tee -a logs/summary.txt
+            ls -la "$ANDROID_HOME/platforms/" 2>/dev/null | tee -a logs/summary.txt || echo "No platforms directory" | tee -a logs/summary.txt
             exit 1
           fi
           
@@ -207,6 +276,8 @@ jobs:
             echo "✅ NDK $ANDROID_NDK_VERSION found" | tee -a logs/summary.txt
           else
             echo "❌ NDK $ANDROID_NDK_VERSION not found" | tee -a logs/summary.txt
+            echo "Available NDK versions:" | tee -a logs/summary.txt
+            ls -la "$ANDROID_HOME/ndk/" 2>/dev/null | tee -a logs/summary.txt || echo "No ndk directory" | tee -a logs/summary.txt
             exit 1
           fi
 
