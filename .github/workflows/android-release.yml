@@ -44,8 +44,10 @@ jobs:
       P4A_LIBFFI_SKIP: "1"
       # Исключаем libffi из рецептов
       P4A_RECIPE_BLACKLIST: "libffi"
-      # Используем webview bootstrap
-      P4A_BOOTSTRAP: "webview"
+      # Используем sdl2 bootstrap для Kivy
+      P4A_BOOTSTRAP: "sdl2"
+      # Используем более новую ветку python-for-android
+      P4A_BRANCH: "develop"
 
     steps:
       - name: Checkout
@@ -533,6 +535,7 @@ jobs:
           P4A_LIBFFI_SKIP: ${{ env.P4A_LIBFFI_SKIP }}
           P4A_RECIPE_BLACKLIST: ${{ env.P4A_RECIPE_BLACKLIST }}
           P4A_BOOTSTRAP: ${{ env.P4A_BOOTSTRAP }}
+          P4A_BRANCH: ${{ env.P4A_BRANCH }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -638,7 +641,8 @@ jobs:
           export P4A_USE_SYSTEM_LIBFFI=1
           export P4A_LIBFFI_SKIP=1
           export P4A_RECIPE_BLACKLIST=libffi
-          export P4A_BOOTSTRAP=webview
+          export P4A_BOOTSTRAP=sdl2
+          export P4A_BRANCH=develop
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
