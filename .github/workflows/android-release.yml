@@ -101,10 +101,21 @@ jobs:
         env:
           SDKM: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin/sdkmanager
           SDKROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -euo pipefail
           mkdir -p logs
           exec &> >(tee -a logs/sdkmanager_install.log)
+          
+          echo "== Environment setup =="
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "SDKROOT: $SDKROOT"
+          echo "SDKM: $SDKM"
+          echo "Current user: $(whoami)"
+          echo "Current directory: $(pwd)"
+          echo "Directory permissions:"
+          ls -la "$ANDROID_HOME" || true
 
           echo "== Accept licenses (multiple attempts) =="
           # Принимаем лицензии с несколькими попытками
@@ -115,6 +126,10 @@ jobs:
               sleep 3
             }
           done
+          
+          # Дополнительная проверка лицензий
+          echo "== Verifying license acceptance =="
+          echo "y" | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
 
           # Проверяем доступные пакеты
           echo "== Available packages =="
@@ -129,15 +144,36 @@ jobs:
             echo "== Installing: $pkg =="
             for i in 1 2 3; do
               echo "Attempt $i for $pkg"
+              
+              # Устанавливаем пакет
               if "$SDKM" --sdk_root="$SDKROOT" --install "$pkg" --verbose; then
-                echo "SUCCESS: $pkg installed"
+                echo "SUCCESS: $pkg installation command completed"
+                
                 # Проверяем, что пакет действительно установился
                 if echo "$pkg" | grep -q "build-tools"; then
                   VERSION=$(echo "$pkg" | cut -d';' -f2)
+                  echo "Checking for build-tools directory: $SDKROOT/build-tools/$VERSION"
                   if [ -d "$SDKROOT/build-tools/$VERSION" ]; then
                     echo "VERIFIED: build-tools $VERSION directory exists"
+                    ls -la "$SDKROOT/build-tools/$VERSION/" | head -5
                   else
                     echo "WARNING: build-tools $VERSION directory not found after installation"
+                    echo "Available build-tools directories:"
+                    ls -la "$SDKROOT/build-tools/" 2>/dev/null || echo "No build-tools directory"
+                  fi
+                elif echo "$pkg" | grep -q "platforms"; then
+                  VERSION=$(echo "$pkg" | cut -d';' -f2)
+                  if [ -d "$SDKROOT/platforms/$VERSION" ]; then
+                    echo "VERIFIED: platform $VERSION directory exists"
+                  else
+                    echo "WARNING: platform $VERSION directory not found after installation"
+                  fi
+                elif echo "$pkg" | grep -q "ndk"; then
+                  VERSION=$(echo "$pkg" | cut -d';' -f2)
+                  if [ -d "$SDKROOT/ndk/$VERSION" ]; then
+                    echo "VERIFIED: NDK $VERSION directory exists"
+                  else
+                    echo "WARNING: NDK $VERSION directory not found after installation"
                   fi
                 fi
                 break
@@ -269,6 +305,8 @@ jobs:
         env:
           SDKM: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin/sdkmanager
           SDKROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -euo pipefail
           echo "=== Android SDK Verification ===" | tee -a logs/summary.txt
@@ -292,9 +330,20 @@ jobs:
               echo "Trying to install build-tools manually..." | tee -a logs/summary.txt
               
               # Попробуем установить build-tools вручную
+              echo "Accepting licenses before manual installation..."
+              echo "y" | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
+              
+              echo "Trying to install build-tools 34.0.0..."
               "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;34.0.0" || true
+              
+              echo "Trying to install build-tools 33.0.2..."
               "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;33.0.2" || true
+              
+              echo "Trying to install build-tools 33.0.1..."
               "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;33.0.1" || true
+              
+              echo "Trying to install build-tools 30.0.3..."
+              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;30.0.3" || true
               
               # Проверяем еще раз
               AVAILABLE_BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | head -1 || echo "")
