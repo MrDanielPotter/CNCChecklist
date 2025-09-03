@@ -762,7 +762,8 @@ jobs:
           echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
           echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
           echo "Checking if buildozer can find SDK:" | tee -a logs/buildozer_build.log
-          buildozer android debug --help 2>&1 | head -20 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -20 | tee -a logs/buildozer_build.log || \
+            echo "buildozer android debug --help failed" | tee -a logs/buildozer_build.log
           
           # Проверяем, что buildozer может найти все необходимые компоненты
           echo "== Checking buildozer SDK detection ==" | tee -a logs/buildozer_build.log
@@ -779,7 +780,8 @@ jobs:
           
           # Принудительная очистка buildozer перед сборкой
           echo "== Forcing buildozer clean ==" | tee -a logs/buildozer_build.log
-          buildozer android clean 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer clean failed (expected - may need dependencies)" | tee -a logs/buildozer_build.log
+          buildozer android clean 2>&1 | tee -a logs/buildozer_build.log || \
+            echo "buildozer clean failed (expected - may need dependencies)" | tee -a logs/buildozer_build.log
           
           # Удаляем кеш buildozer для принудительного пересоздания
           echo "== Removing buildozer cache ==" | tee -a logs/buildozer_build.log
@@ -821,11 +823,14 @@ jobs:
           
           # Проверяем содержимое .buildozer директории
           echo "== Checking .buildozer contents ==" | tee -a logs/buildozer_build.log
-          find .buildozer -type f -name "*.py" -o -name "*.json" -o -name "*.txt" 2>/dev/null | head -20 | tee -a logs/buildozer_build.log || echo "No buildozer files found" | tee -a logs/buildozer_build.log
+          find .buildozer -type f -name "*.py" -o -name "*.json" -o -name "*.txt" 2>/dev/null | \
+            head -20 | tee -a logs/buildozer_build.log || \
+            echo "No buildozer files found" | tee -a logs/buildozer_build.log
           
-          # Проверяем, что buildozer может найти все необходимые компоненты после инициализации
+          # Проверяем buildozer SDK detection после инициализации
           echo "== Re-checking buildozer SDK detection after init ==" | tee -a logs/buildozer_build.log
-          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after init" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
+            echo "buildozer android debug --help failed after init" | tee -a logs/buildozer_build.log
           
           # Исправляем проблемы с libffi и autotools перед созданием проекта
           echo "== Fixing libffi and autotools issues ==" | tee -a logs/buildozer_build.log
@@ -845,15 +850,19 @@ jobs:
           
           # Проверяем, что Android проект создан
           echo "== Checking Android project creation ==" | tee -a logs/buildozer_build.log
-          ls -la .buildozer/android/ 2>&1 | tee -a logs/buildozer_build.log || echo ".buildozer/android directory not found" | tee -a logs/buildozer_build.log
+          ls -la .buildozer/android/ 2>&1 | tee -a logs/buildozer_build.log || \
+            echo ".buildozer/android directory not found" | tee -a logs/buildozer_build.log
           
           # Проверяем содержимое Android проекта
           echo "== Checking Android project contents ==" | tee -a logs/buildozer_build.log
-          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" -o -name "AndroidManifest.xml" 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Android project files found" | tee -a logs/buildozer_build.log
+          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" -o -name "AndroidManifest.xml" 2>/dev/null | \
+            tee -a logs/buildozer_build.log || \
+            echo "No Android project files found" | tee -a logs/buildozer_build.log
           
-          # Проверяем, что buildozer может найти все необходимые компоненты после создания Android проекта
+          # Проверяем buildozer SDK detection после создания проекта
           echo "== Final buildozer SDK detection check ==" | tee -a logs/buildozer_build.log
-          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
+            echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
           
           # Попробуем сначала простую команду
           echo "== Attempting buildozer build ==" | tee -a logs/buildozer_build.log
@@ -867,15 +876,19 @@ jobs:
           
           # Проверяем, что Android проект создан
           echo "== Checking Android project creation ==" | tee -a logs/buildozer_build.log
-          ls -la .buildozer/android/ 2>&1 | tee -a logs/buildozer_build.log || echo ".buildozer/android directory not found" | tee -a logs/buildozer_build.log
+          ls -la .buildozer/android/ 2>&1 | tee -a logs/buildozer_build.log || \
+            echo ".buildozer/android directory not found" | tee -a logs/buildozer_build.log
           
           # Проверяем содержимое Android проекта
           echo "== Checking Android project contents ==" | tee -a logs/buildozer_build.log
-          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" -o -name "AndroidManifest.xml" 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Android project files found" | tee -a logs/buildozer_build.log
+          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" -o -name "AndroidManifest.xml" 2>/dev/null | \
+            tee -a logs/buildozer_build.log || \
+            echo "No Android project files found" | tee -a logs/buildozer_build.log
           
-          # Проверяем, что buildozer может найти все необходимые компоненты после создания Android проекта
+          # Проверяем buildozer SDK detection после создания проекта
           echo "== Final buildozer SDK detection check ==" | tee -a logs/buildozer_build.log
-          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
+            echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
           
           # Создаем символические ссылки на Gradle файлы для GitHub Actions
           echo "== Creating symlinks for Gradle files ==" | tee -a logs/buildozer_build.log
@@ -889,7 +902,8 @@ jobs:
           
           # Проверяем созданные символические ссылки
           echo "== Checking created symlinks ==" | tee -a logs/buildozer_build.log
-          ls -la *.gradle* gradle-wrapper.properties 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Gradle symlinks found" | tee -a logs/buildozer_build.log
+          ls -la *.gradle* gradle-wrapper.properties 2>/dev/null | tee -a logs/buildozer_build.log || \
+            echo "No Gradle symlinks found" | tee -a logs/buildozer_build.log
           
           if buildozer android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
@@ -928,7 +942,9 @@ jobs:
           
           # Проверяем все Gradle файлы в проекте
           echo "== Final check for Gradle files ==" | tee -a logs/buildozer_build.log
-          find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Gradle files found anywhere" | tee -a logs/buildozer_build.log
+          find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | \
+            tee -a logs/buildozer_build.log || \
+            echo "No Gradle files found anywhere" | tee -a logs/buildozer_build.log
           
           # Проверяем результат сборки
           echo "== Checking build results ==" | tee -a logs/summary.txt
@@ -956,7 +972,8 @@ jobs:
           else
             echo "APK build: FAILED - no files found in bin/" | tee -a logs/summary.txt
             echo "Checking for any build artifacts..." | tee -a logs/summary.txt
-            find . -name "*.apk" -o -name "*.aab" 2>/dev/null | tee -a logs/summary.txt || echo "No APK/AAB files found anywhere" | tee -a logs/summary.txt
+            find . -name "*.apk" -o -name "*.aab" 2>/dev/null | tee -a logs/summary.txt || \
+              echo "No APK/AAB files found anywhere" | tee -a logs/summary.txt
             echo "Checking .buildozer directory..." | tee -a logs/summary.txt
             ls -la .buildozer/ 2>/dev/null | tee -a logs/summary.txt || echo ".buildozer directory not found" | tee -a logs/summary.txt
             
@@ -965,9 +982,13 @@ jobs:
             echo "Checking .buildozer/android directory:" | tee -a logs/summary.txt
             ls -la .buildozer/android/ 2>&1 | tee -a logs/summary.txt || echo ".buildozer/android directory not found" | tee -a logs/summary.txt
             echo "Checking for gradle files:" | tee -a logs/summary.txt
-            find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | tee -a logs/summary.txt || echo "No gradle files found" | tee -a logs/summary.txt
+            find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | \
+              tee -a logs/summary.txt || \
+              echo "No gradle files found" | tee -a logs/summary.txt
             echo "Checking for Android project structure:" | tee -a logs/summary.txt
-            find . -name "AndroidManifest.xml" -o -name "build.gradle" 2>/dev/null | tee -a logs/summary.txt || echo "No Android project files found" | tee -a logs/summary.txt
+            find . -name "AndroidManifest.xml" -o -name "build.gradle" 2>/dev/null | \
+              tee -a logs/summary.txt || \
+              echo "No Android project files found" | tee -a logs/summary.txt
             
             # Проверяем, что buildozer действительно запустился
             echo "Checking if buildozer process completed:" | tee -a logs/summary.txt
