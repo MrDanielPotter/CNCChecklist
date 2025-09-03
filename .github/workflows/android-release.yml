@@ -38,6 +38,10 @@ jobs:
       AUTOMAKE_VERSION: "1.16"
       # Переменные для обхода проблем с libffi
       LT_SYS_SYMBOL_USCORE: "no"
+      # Используем системную версию libffi
+      P4A_USE_SYSTEM_LIBFFI: "1"
+      # Отключаем компиляцию libffi
+      P4A_LIBFFI_SKIP: "1"
 
     steps:
       - name: Checkout
@@ -521,6 +525,8 @@ jobs:
           AUTOCONF_VERSION: ${{ env.AUTOCONF_VERSION }}
           AUTOMAKE_VERSION: ${{ env.AUTOMAKE_VERSION }}
           LT_SYS_SYMBOL_USCORE: ${{ env.LT_SYS_SYMBOL_USCORE }}
+          P4A_USE_SYSTEM_LIBFFI: ${{ env.P4A_USE_SYSTEM_LIBFFI }}
+          P4A_LIBFFI_SKIP: ${{ env.P4A_LIBFFI_SKIP }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -623,6 +629,8 @@ jobs:
           export LT_SYS_SYMBOL_USCORE=no
           export AUTOCONF_VERSION=2.71
           export AUTOMAKE_VERSION=1.16
+          export P4A_USE_SYSTEM_LIBFFI=1
+          export P4A_LIBFFI_SKIP=1
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
