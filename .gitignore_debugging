@@ -1,0 +1,41 @@
+# Инструменты диагностики - временные файлы
+
+# Логи
+logs/
+*.log
+
+# Кэш сборки
+.buildozer/
+bin/
+dist/
+
+# Временные файлы Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Переменные окружения
+.env
+.env.local
+
+# IDE файлы
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Android SDK/NDK (если скачиваются локально)
+android-sdk/
+android-ndk/
+
+# Временные файлы диагностики
+debug_output.txt
+test_results.txt
+diagnostics_*.txt
