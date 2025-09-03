@@ -656,6 +656,14 @@ jobs:
           ln -sf "$ANDROID_HOME/ndk" "$BUILDIZER_SDK_DIR/ndk" || true
           ln -sf "$ANDROID_HOME/cmdline-tools" "$BUILDIZER_SDK_DIR/cmdline-tools" || true
           
+          # Проверяем, что ссылки созданы правильно
+          echo "== Verifying symlinks ==" | tee -a logs/buildozer_build.log
+          ls -la "$BUILDIZER_SDK_DIR/" | tee -a logs/buildozer_build.log
+          echo "Checking build-tools:" | tee -a logs/buildozer_build.log
+          ls -la "$BUILDIZER_SDK_DIR/build-tools/" | tee -a logs/buildozer_build.log || echo "build-tools not found" | tee -a logs/buildozer_build.log
+          echo "Checking platforms:" | tee -a logs/buildozer_build.log
+          ls -la "$BUILDIZER_SDK_DIR/platforms/" | tee -a logs/buildozer_build.log || echo "platforms not found" | tee -a logs/buildozer_build.log
+          
           # Создаем старую структуру tools для совместимости с buildozer
           mkdir -p "$BUILDIZER_SDK_DIR/tools/bin"
           ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$BUILDIZER_SDK_DIR/tools/bin/sdkmanager" || true
@@ -703,16 +711,36 @@ jobs:
           buildozer --version | tee -a logs/buildozer_build.log || echo "buildozer --version failed" | tee -a logs/buildozer_build.log
           which buildozer | tee -a logs/buildozer_build.log
           
+          # Проверяем, что buildozer может найти SDK компоненты
+          echo "== Checking SDK components availability ==" | tee -a logs/buildozer_build.log
+          echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
+          echo "Checking if buildozer can find SDK:" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -20 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed" | tee -a logs/buildozer_build.log
+          
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
-          if buildozer -v android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
+          echo "Build type: $BUILD_TYPE" | tee -a logs/buildozer_build.log
+          echo "Using command: buildozer -v android $BUILD_TYPE" | tee -a logs/buildozer_build.log
+          
+          # Попробуем сначала простую команду
+          if buildozer android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
           else
             BUILD_EXIT_CODE=$?
-            echo "Buildozer command failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
-            echo "Last 50 lines of build log:" | tee -a logs/summary.txt
-            tail -50 logs/buildozer_build.log | tee -a logs/summary.txt
-            exit $BUILD_EXIT_CODE
+            echo "Simple buildozer command failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
+            echo "Trying with verbose flag..." | tee -a logs/summary.txt
+            
+            # Попробуем с verbose флагом
+            if buildozer -v android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
+              echo "Buildozer command with verbose completed successfully" | tee -a logs/summary.txt
+            else
+              BUILD_EXIT_CODE=$?
+              echo "Buildozer command with verbose also failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
+              echo "Last 50 lines of build log:" | tee -a logs/summary.txt
+              tail -50 logs/buildozer_build.log | tee -a logs/summary.txt
+              exit $BUILD_EXIT_CODE
+            fi
           fi
           
           # Проверяем результат сборки
