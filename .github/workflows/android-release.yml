@@ -507,27 +507,48 @@ jobs:
           rm -rf bin .buildozer
           mkdir -p bin
           
-          # Обновляем buildozer.spec с актуальными версиями
-          echo "== Updating buildozer.spec with actual versions ==" | tee -a logs/buildozer_build.log
+          # Обновляем buildozer.spec с актуальными версиями и путями
+          echo "== Updating buildozer.spec with actual versions and paths ==" | tee -a logs/buildozer_build.log
+          echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
           echo "ANDROID_PLATFORM: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
           echo "ANDROID_BUILD_TOOLS: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
           echo "ANDROID_NDK_VERSION: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
           
-          # Обновляем buildozer.spec с актуальными версиями
+          # Обновляем buildozer.spec с актуальными версиями и путями
           if [ -f "buildozer.spec" ]; then
             # Создаем резервную копию
             cp buildozer.spec buildozer.spec.backup
             
-            # Обновляем версии в buildozer.spec
+            # Обновляем пути и версии в buildozer.spec
+            sed -i "s|android\.sdk_dir = .*|android.sdk_dir = $ANDROID_HOME|" buildozer.spec
+            sed -i "s|android\.ndk_dir = .*|android.ndk_dir = $ANDROID_NDK_HOME|" buildozer.spec
             sed -i "s/android\.platform = .*/android.platform = $ANDROID_PLATFORM/" buildozer.spec
             sed -i "s/android\.build_tools = .*/android.build_tools = $ANDROID_BUILD_TOOLS/" buildozer.spec
             sed -i "s/android\.ndk = .*/android.ndk = $ANDROID_NDK_VERSION/" buildozer.spec
             
-            echo "Updated buildozer.spec with actual versions" | tee -a logs/buildozer_build.log
+            echo "Updated buildozer.spec with actual versions and paths" | tee -a logs/buildozer_build.log
+            echo "Updated android.sdk_dir to: $ANDROID_HOME" | tee -a logs/buildozer_build.log
+            echo "Updated android.ndk_dir to: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
             echo "Updated android.platform to: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
             echo "Updated android.build_tools to: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
             echo "Updated android.ndk to: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
           fi
+          
+          # Создаем символические ссылки для buildozer
+          echo "== Creating symlinks for buildozer ==" | tee -a logs/buildozer_build.log
+          BUILDIZER_SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$BUILDIZER_SDK_DIR"
+          
+          # Создаем символические ссылки на наши установленные компоненты
+          ln -sf "$ANDROID_HOME/build-tools" "$BUILDIZER_SDK_DIR/build-tools" || true
+          ln -sf "$ANDROID_HOME/platforms" "$BUILDIZER_SDK_DIR/platforms" || true
+          ln -sf "$ANDROID_HOME/platform-tools" "$BUILDIZER_SDK_DIR/platform-tools" || true
+          ln -sf "$ANDROID_HOME/ndk" "$BUILDIZER_SDK_DIR/ndk" || true
+          ln -sf "$ANDROID_HOME/cmdline-tools" "$BUILDIZER_SDK_DIR/cmdline-tools" || true
+          
+          echo "Created symlinks in $BUILDIZER_SDK_DIR" | tee -a logs/buildozer_build.log
+          ls -la "$BUILDIZER_SDK_DIR" | tee -a logs/buildozer_build.log
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
