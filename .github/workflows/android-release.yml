@@ -63,11 +63,19 @@ jobs:
         run: |
           set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y autoconf automake libtool pkg-config autoconf-archive
+          sudo apt-get install -y autoconf automake libtool libtool-bin pkg-config autoconf-archive
           # Проверяем версии
           autoconf --version
           automake --version
-          libtool --version
+          libtool --version || echo "libtool not found, trying libtool-bin"
+          libtool-bin --version || echo "libtool-bin not found"
+          # Проверяем доступность libtool
+          which libtool || which libtool-bin || echo "No libtool found in PATH"
+          # Создаем символическую ссылку если нужно
+          if ! which libtool && which libtool-bin; then
+            sudo ln -sf $(which libtool-bin) /usr/bin/libtool
+            echo "Created symlink: libtool -> libtool-bin"
+          fi
 
       - name: Install system deps (Ubuntu 24.04)
         run: |
