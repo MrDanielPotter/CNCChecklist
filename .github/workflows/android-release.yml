@@ -799,6 +799,36 @@ jobs:
           echo "Files in current directory:" | tee -a logs/buildozer_build.log
           ls -la | tee -a logs/buildozer_build.log
           
+          # Попробуем принудительно создать Android проект
+          echo "== Forcing Android project creation ==" | tee -a logs/buildozer_build.log
+          buildozer android update 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android update failed" | tee -a logs/buildozer_build.log
+          
+          # Проверяем, что Android проект создан
+          echo "== Checking Android project creation ==" | tee -a logs/buildozer_build.log
+          ls -la .buildozer/android/ 2>&1 | tee -a logs/buildozer_build.log || echo ".buildozer/android directory not found" | tee -a logs/buildozer_build.log
+          
+          # Проверяем содержимое Android проекта
+          echo "== Checking Android project contents ==" | tee -a logs/buildozer_build.log
+          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" -o -name "AndroidManifest.xml" 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Android project files found" | tee -a logs/buildozer_build.log
+          
+          # Проверяем, что buildozer может найти все необходимые компоненты после создания Android проекта
+          echo "== Final buildozer SDK detection check ==" | tee -a logs/buildozer_build.log
+          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after project creation" | tee -a logs/buildozer_build.log
+          
+          # Создаем символические ссылки на Gradle файлы для GitHub Actions
+          echo "== Creating symlinks for Gradle files ==" | tee -a logs/buildozer_build.log
+          if [ -d ".buildozer/android/platform/build-armeabi-v7a" ]; then
+            find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | head -5 | while read file; do
+              filename=$(basename "$file")
+              ln -sf "$file" "$filename" 2>/dev/null || true
+              echo "Created symlink: $filename -> $file" | tee -a logs/buildozer_build.log
+            done
+          fi
+          
+          # Проверяем созданные символические ссылки
+          echo "== Checking created symlinks ==" | tee -a logs/buildozer_build.log
+          ls -la *.gradle* gradle-wrapper.properties 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Gradle symlinks found" | tee -a logs/buildozer_build.log
+          
           if buildozer android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
           else
@@ -817,6 +847,20 @@ jobs:
               exit $BUILD_EXIT_CODE
             fi
           fi
+          
+          # После сборки создаем дополнительные символические ссылки
+          echo "== Creating additional symlinks after build ==" | tee -a logs/buildozer_build.log
+          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | while read file; do
+            filename=$(basename "$file")
+            if [ ! -e "$filename" ]; then
+              ln -sf "$file" "$filename" 2>/dev/null || true
+              echo "Created additional symlink: $filename -> $file" | tee -a logs/buildozer_build.log
+            fi
+          done
+          
+          # Проверяем все Gradle файлы в проекте
+          echo "== Final check for Gradle files ==" | tee -a logs/buildozer_build.log
+          find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | tee -a logs/buildozer_build.log || echo "No Gradle files found anywhere" | tee -a logs/buildozer_build.log
           
           # Проверяем результат сборки
           echo "== Checking build results ==" | tee -a logs/summary.txt
