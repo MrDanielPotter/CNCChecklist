@@ -1,9 +1,14 @@
+import logging
 from .models import Block, ChecklistItem
 
+logger = logging.getLogger(__name__)
+
 def make_blocks() -> list[Block]:
+    logger.info("Создание блоков чек-листа")
     B = []
 
     # Блок 1 – Предварительная подготовка
+    logger.info("Создание блока 1: Предварительная подготовка")
     items1 = [
         ChecklistItem("1.1","Номер детали переписан в тетрадь",
                       "Переписать номер заказа в тетрадь (пример: 111111_11), номер совпадает с УП и чертежом. При расхождении остановить процесс и уточнить у руководителя."),
@@ -17,8 +22,10 @@ def make_blocks() -> list[Block]:
                       "Сверить толщину и декор материала с заказ-нарядом.", critical=True),
     ]
     B.append(Block("B1", "Блок 1 – Предварительная подготовка", items1))
+    logger.info(f"Блок 1 создан с {len(items1)} пунктами")
 
     # Блок 2 – Проверка УП (TPACAD)
+    logger.info("Создание блока 2: Проверка УП (TPACAD)")
     items2 = [
         ChecklistItem("2.1","Файл УП открыт","Открыть файл в TPACAD."),
         ChecklistItem("2.2","Инструмент соответствует","Проверить назначенные инструменты, соответствие параметров УП и доступных фрез.", critical=True),
@@ -30,8 +37,10 @@ def make_blocks() -> list[Block]:
         ChecklistItem("2.8","Файл УП проверен и сохранен","После проверки сохранить файл в актуальной версии."),
     ]
     B.append(Block("B2", "Блок 2 – Проверка УП (TPACAD)", items2))
+    logger.info(f"Блок 2 создан с {len(items2)} пунктами")
 
     # Блок 3 – Проверка заготовки
+    logger.info("Создание блока 3: Проверка заготовки")
     items3 = [
         ChecklistItem("3.1","Заготовка на столе загрузки","Разместить заготовку на загрузочном столе."),
         ChecklistItem("3.2","Защитная пленка снята","Удалить плёнку с рабочей поверхности."),
@@ -42,8 +51,10 @@ def make_blocks() -> list[Block]:
         ChecklistItem("3.7","Толщина измерена","Измерить толщину в нескольких местах.", critical=True),
     ]
     B.append(Block("B3", "Блок 3 – Проверка заготовки", items3))
+    logger.info(f"Блок 3 создан с {len(items3)} пунктами")
 
     # Блок 4 – Подготовка программы к работе (WSCM)
+    logger.info("Создание блока 4: Подготовка программы к работе (WSCM)")
     items4 = [
         ChecklistItem("4.1","Файл сохранен в CNC_work","Сохранить файл в папку CNC_work/ГГГГ-ММ-ДД/."),
         ChecklistItem("4.2","Файл открыт в WSCM","Открыть сохранённый файл в WSCM."),
@@ -51,8 +62,10 @@ def make_blocks() -> list[Block]:
         ChecklistItem("4.4","Новый список создан","Сформировать новый список с текущим заказом."),
     ]
     B.append(Block("B4", "Блок 4 – Подготовка программы к работе (WSCM)", items4))
+    logger.info(f"Блок 4 создан с {len(items4)} пунктами")
 
     # Блок 5 – Подготовка станка и запуск
+    logger.info("Создание блока 5: Подготовка станка и запуск")
     items5 = [
         ChecklistItem("5.1","Деталь зафиксирована","Убедиться в надёжной фиксации детали на столе.", critical=True),
         ChecklistItem("5.2","Вакуумные краны включены корректно","Проверить включение вакуумных зон по схеме.", critical=True),
@@ -61,5 +74,10 @@ def make_blocks() -> list[Block]:
         ChecklistItem("5.5","Название УП – верно","Проверить, что загруженное УП соответствует заказу и чертежу.", critical=True),
     ]
     B.append(Block("B5", "Блок 5 – Подготовка станка и запуск", items5))
+    logger.info(f"Блок 5 создан с {len(items5)} пунктами")
 
+    total_items = sum(len(block.items) for block in B)
+    critical_items = sum(1 for block in B for item in block.items if item.critical)
+    logger.info(f"Чек-лист создан: {len(B)} блоков, {total_items} пунктов, {critical_items} критических")
+    
     return B

@@ -1,4 +1,4 @@
-import os, time, json, io
+import os, time, json, io, logging
 from datetime import datetime
 from kivy.app import App
 from kivy.lang import Builder
@@ -18,6 +18,11 @@ from .pdf_report import generate_pdf
 from . import android_utils
 from . import emailer
 
+# Импорт системы логирования и диагностики
+from .logging_config import setup_logging, log_app_info, log_performance, audit_logger
+from .diagnostics import DiagnosticsCollector
+from .performance_monitor import performance_monitor, monitor_performance
+
 APP_VERSION = "1.3"
 DEFAULT_MASTER_PIN = "2969"
 DEFAULT_ADMIN_PIN = "7717"
@@ -30,26 +35,58 @@ class RootSM(ScreenManager): pass
 
 class CNCChecklistApp(App):
     def build(self):
-        Builder.load_file(os.path.join(os.path.dirname(__file__), "cnc_checklist.kv"))
-        self.sm = RootSM()
-        self.sm.add_widget(Builder.template("StartScreen")())
-        self.sm.add_widget(Builder.template("ChecklistScreen")())
-        self.sm.add_widget(Builder.template("HistoryScreen")())
-        self.sm.add_widget(Builder.template("SettingsScreen")())
-        self.state = None
-        self.settings = self._load_settings()
-        self.history_index = []
-        Clock.schedule_interval(lambda dt: self.autosave(), AUTO_SAVE_SEC)
-        if platform == "android":
-            android_utils.ensure_permissions()
-        return self.sm
+        # Настройка логирования
+        setup_logging()
+        log_app_info()
+        
+        # Запуск мониторинга производительности
+        performance_monitor.start_system_monitoring(interval=60)
+        
+        logger = logging.getLogger(__name__)
+        logger.info("Инициализация приложения CNC Checklist")
+        
+        try:
+            Builder.load_file(os.path.join(os.path.dirname(__file__), "cnc_checklist.kv"))
+            logger.info("KV файл загружен успешно")
+            
+            self.sm = RootSM()
+            self.sm.add_widget(Builder.template("StartScreen")())
+            self.sm.add_widget(Builder.template("ChecklistScreen")())
+            self.sm.add_widget(Builder.template("HistoryScreen")())
+            self.sm.add_widget(Builder.template("SettingsScreen")())
+            logger.info("Экраны приложения инициализированы")
+            
+            self.state = None
+            self.settings = self._load_settings()
+            self.history_index = []
+            logger.info("Настройки загружены")
+            
+            Clock.schedule_interval(lambda dt: self.autosave(), AUTO_SAVE_SEC)
+            logger.info(f"Автосохранение настроено каждые {AUTO_SAVE_SEC} секунд")
+            
+            if platform == "android":
+                logger.info("Платформа Android обнаружена, запрашиваем разрешения")
+                android_utils.ensure_permissions()
+            else:
+                logger.info(f"Платформа: {platform}")
+                
+            logger.info("Приложение успешно инициализировано")
+            return self.sm
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации приложения: {e}")
+            raise
 
     def _load_settings(self)->Settings:
+        logger.info("Загрузка настроек приложения")
         d = load_json("settings.json", None)
         if not d:
+            logger.info("Настройки не найдены, создаем настройки по умолчанию")
             d = Settings(admin_pin_hash=sha(DEFAULT_ADMIN_PIN),
                          master_pin_hash=sha(DEFAULT_MASTER_PIN)).__dict__
             save_json("settings.json", d)
+            logger.info("Настройки по умолчанию сохранены")
+        else:
+            logger.info("Настройки загружены из файла")
         return Settings(**d)
 
     # ======== Навигация
@@ -68,10 +105,15 @@ class CNCChecklistApp(App):
     # ======== Старт сессии
     def start_session(self, order):
         order = (order or "").strip()
+        logger.info(f"Попытка начать сессию для заказа: {order}")
+        
         if not order or "_" not in order or not order.replace("_","").isdigit():
+            logger.warning(f"Неверный формат номера заказа: {order}")
             self._popup_info("Введите номер заказа в формате 123456_78"); return
+            
         existing = load_json("session.json", None)
         if existing and not existing.get("completed"):
+            logger.info("Найдена незавершенная сессия, предлагаем выбор пользователю")
             # Есть незавершённая — предложить продолжить/сбросить
             box = BoxLayout(orientation='vertical', spacing=8, padding=8)
             box.add_widget(Label(text="Найдена незавершённая сессия."))
@@ -85,16 +127,25 @@ class CNCChecklistApp(App):
             b2.bind(on_release=lambda *_: (popup.dismiss(), self._new_session(order)))
             popup.open()
         else:
+            logger.info("Создание новой сессии")
             self._new_session(order)
 
     def _resume_session(self, d):
+        logger.info("Возобновление существующей сессии")
         self.state = SessionState(**d["state"])
+        logger.info(f"Сессия возобновлена для заказа: {self.state.order_number}")
         self._enter_checklist()
 
+    @monitor_performance("new_session_creation")
     def _new_session(self, order):
+        logger = logging.getLogger(__name__)
+        logger.info(f"Создание новой сессии для заказа: {order}")
+        audit_logger.log_session_start(order)
+        
         blocks = make_blocks()
         self.state = SessionState(order_number=order, started_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), blocks=blocks)
         save_json("session.json", {"state": j(self.state), "completed": False})
+        logger.info("Новая сессия создана и сохранена")
         self._enter_checklist()
 
     def _enter_checklist(self):
@@ -148,30 +199,48 @@ class CNCChecklistApp(App):
 
     def mark(self, ok:bool):
         b, it = self._current()
+        logger.info(f"Отметка пункта {it.id}: {'✓' if ok else '✗'} (критический: {it.critical})")
+        
         if it.started_at is None:
             it.started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logger.info(f"Пункт {it.id} начат в {it.started_at}")
+            
         # Критический «✗» — блокировка с мастер-PIN
         if not ok and it.critical:
+            logger.warning(f"Попытка отметить критический пункт {it.id} как невыполненный, требуется мастер-PIN")
             self._require_master_pin(lambda master_name: self._mark_after_master(it, master_name))
             return
         self._complete_item(it, ok)
 
     def _mark_after_master(self, it, master_name):
+        logger = logging.getLogger(__name__)
+        logger.info(f"Мастер {master_name} обходит критический пункт {it.id}")
+        audit_logger.log_master_bypass(it.id, master_name)
+        
         self._complete_item(it, False)
         it.bypassed_by_master = master_name
         self._popup_info(f"Обход критического пункта мастером: {master_name}")
 
     def _complete_item(self, it, ok):
+        logger = logging.getLogger(__name__)
+        
         if it.started_at is None:
             it.started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         it.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         it.status = ok
+        logger.info(f"Пункт {it.id} завершен в {it.completed_at} со статусом {'✓' if ok else '✗'}")
+        
+        # Аудит завершения пункта
+        audit_logger.log_item_completion(it.id, ok, it.critical)
+        
         # duration
         try:
             t0 = datetime.strptime(it.started_at, "%Y-%m-%d %H:%M:%S")
             t1 = datetime.strptime(it.completed_at, "%Y-%m-%d %H:%M:%S")
             it.duration_sec = int((t1 - t0).total_seconds())
-        except Exception:
+            logger.info(f"Пункт {it.id} выполнялся {it.duration_sec} секунд")
+        except Exception as e:
+            logger.error(f"Ошибка при вычислении времени выполнения пункта {it.id}: {e}")
             it.duration_sec = None
         self.autosave()
         self._refresh_checklist_ui()
@@ -202,6 +271,7 @@ class CNCChecklistApp(App):
         self._refresh_checklist_ui()
 
     # ======== Завершение и PDF
+    @monitor_performance("pdf_generation")
     def finish_and_pdf(self):
         if not self.state: return
         completed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -233,6 +303,8 @@ class CNCChecklistApp(App):
         tmp_dir = self.user_data_dir
         tmp_pdf = os.path.join(tmp_dir, fname)
         generate_pdf(report, tmp_pdf)
+        audit_logger.log_pdf_generation(report['order'], tmp_pdf)
+        
         # Если выбран SAF — копируем в выбранную папку
         saved_uri = None
         if self.settings.saf_tree_uri:
@@ -250,12 +322,15 @@ class CNCChecklistApp(App):
         if self.settings.smtp_enabled and self.settings.smtp_recipients:
             try:
                 emailer.send_mail(self.settings.__dict__, f"Отчёт CNC {report['order']}", "См. вложение", [tmp_pdf])
+                audit_logger.log_email_send(report['order'], self.settings.smtp_recipients, True)
             except Exception as e:
+                audit_logger.log_email_send(report['order'], self.settings.smtp_recipients, False)
                 self._popup_info(f"Ошибка e-mail: {e}")
 
         self._popup_info("PDF создан. Разрешена фрезеровка детали. Осуществить контроль фрезерования.")
         # Завершаем сессию
         save_json("session.json", {"state": j(self.state), "completed": True})
+        audit_logger.log_session_end(self.state.order_number, True)
 
     # ======== История
     def refresh_history(self):
@@ -328,8 +403,24 @@ class CNCChecklistApp(App):
         self._popup_info("Откройте app/settings.json и заполните SMTP (host/port/tls/ssl/user/pass, recipients).")
 
     def export_logs(self):
-        # логи можно писать в history.json — для краткости используем его
-        self._popup_info("Логи сохраняются в history.json (экспортируйте файл).")
+        """Экспорт логов и диагностической информации"""
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info("Экспорт диагностической информации")
+            
+            # Создаем диагностический отчет
+            collector = DiagnosticsCollector()
+            diagnostics_file = collector.export_diagnostics()
+            
+            # Экспортируем метрики производительности
+            metrics_file = os.path.join(self.user_data_dir, f"performance_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+            performance_monitor.export_metrics(metrics_file)
+            
+            self._popup_info(f"Диагностика экспортирована:\n{os.path.basename(diagnostics_file)}\n{os.path.basename(metrics_file)}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при экспорте диагностики: {e}")
+            self._popup_info(f"Ошибка при экспорте: {e}")
 
     # ======== PIN-охранники
     def _locked(self)->bool:
@@ -374,17 +465,27 @@ class CNCChecklistApp(App):
         def chk(*_):
             if sha(ti.text.strip()) == expected_hash:
                 self._reset_pin_fail()
+                audit_logger.log_pin_attempt("ADMIN" if "админ" in title.lower() else "MASTER", True)
                 p.dismiss(); ok_cb()
             else:
                 self._register_pin_fail()
+                audit_logger.log_pin_attempt("ADMIN" if "админ" in title.lower() else "MASTER", False)
                 self._popup_info("Неверный PIN.")
         b.bind(on_release=chk); p.open()
 
     # ======== Вспомогательные
     def autosave(self):
-        if not self.state: return
-        save_json("session.json", {"state": j(self.state), "completed": False})
+        if not self.state: 
+            logger.debug("Нет активной сессии для автосохранения")
+            return
+        try:
+            save_json("session.json", {"state": j(self.state), "completed": False})
+            logger.debug("Автосохранение выполнено успешно")
+        except Exception as e:
+            logger.error(f"Ошибка при автосохранении: {e}")
+            
     def _popup_info(self, text):
+        logger.info(f"Показ сообщения пользователю: {text}")
         Popup(title="Сообщение", content=Label(text=text), size_hint=(.85,.4)).open()
 
 if __name__ == "__main__":

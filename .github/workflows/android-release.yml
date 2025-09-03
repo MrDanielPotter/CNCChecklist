@@ -1,9 +1,18 @@
-name: Build Android APK (with extended logs)
+name: Build Android APK (CNC Checklist v1.3)
 
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type (debug/release)'
+        required: false
+        default: 'debug'
+        type: choice
+        options:
+        - debug
+        - release
 
 jobs:
   build-apk:
@@ -15,6 +24,10 @@ jobs:
       ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       P4A_DEBUG: "1"
+      # Стабильные версии Android SDK (соответствуют buildozer.spec)
+      ANDROID_PLATFORM: "android-33"
+      ANDROID_BUILD_TOOLS: "34.0.0"
+      ANDROID_NDK_VERSION: "25.2.9519653"
 
     steps:
       - name: Checkout
@@ -23,7 +36,12 @@ jobs:
       - name: Prepare logs dir
         run: |
           mkdir -p logs
+          echo "=== CNC Checklist Build Workflow ===" | tee -a logs/summary.txt
           echo "Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
+          echo "Build type: ${{ github.event.inputs.build_type || 'debug' }}" | tee -a logs/summary.txt
+          echo "Target Android API: $ANDROID_PLATFORM" | tee -a logs/summary.txt
+          echo "Build tools: $ANDROID_BUILD_TOOLS" | tee -a logs/summary.txt
+          echo "NDK version: $ANDROID_NDK_VERSION" | tee -a logs/summary.txt
 
       - name: Set up Java 17 (Temurin)
         uses: actions/setup-java@v4
@@ -43,7 +61,10 @@ jobs:
           sudo apt-get install -y \
             git zip unzip \
             libstdc++6 libffi-dev libssl-dev zlib1g-dev \
-            libncurses6 libtinfo6
+            libncurses6 libtinfo6 \
+            build-essential \
+            python3-dev \
+            python3-venv
 
       - name: System info (env, versions, disk)
         run: |
@@ -100,11 +121,14 @@ jobs:
           }
 
           install_pkg "platform-tools"
-          install_pkg "platforms;android-33"
-          install_pkg "build-tools;34.0.0"
-          install_pkg "ndk;25.2.9519653"
+          install_pkg "platforms;$ANDROID_PLATFORM"
+          install_pkg "build-tools;$ANDROID_BUILD_TOOLS"
+          install_pkg "ndk;$ANDROID_NDK_VERSION"
 
-          ln -s "$ANDROID_HOME/ndk/25.2.9519653" "$ANDROID_NDK_HOME" || true
+          # Создаем символическую ссылку на NDK
+          ln -s "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME" || true
+          
+          # Удаляем неиспользуемые версии build-tools
           if [ -L "$ANDROID_HOME/build-tools/36.1.0-rc1" ]; then rm -f "$ANDROID_HOME/build-tools/36.1.0-rc1"; fi
 
           echo "== Verify installed list (head) =="
@@ -118,6 +142,10 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip wheel setuptools cython
           python -m pip install buildozer==1.5.0
+          
+          # Проверяем версии установленных пакетов
+          echo "=== Installed Python packages ===" | tee -a logs/system_info.txt
+          pip list | grep -E "(buildozer|kivy|pillow|reportlab)" | tee -a logs/system_info.txt
 
       - name: Download DejaVuSans.ttf (for Cyrillic PDF)
         run: |
@@ -130,51 +158,116 @@ jobs:
         run: |
           set -euo pipefail
           test -f buildozer.spec || { echo "buildozer.spec not found"; exit 1; }
-          head -n 5 buildozer.spec
-          python -c "import configparser,sys; cfg=configparser.ConfigParser(); cfg.read('buildozer.spec', encoding='utf-8'); assert 'app' in cfg, 'Missing [app] section in buildozer.spec'; print('buildozer.spec OK: [app] present')"
+          
+          echo "=== buildozer.spec validation ===" | tee -a logs/summary.txt
+          head -n 10 buildozer.spec | tee -a logs/summary.txt
+          
+          # Проверяем соответствие версий в buildozer.spec
+          python -c "
+          import configparser, sys
+          cfg = configparser.ConfigParser()
+          cfg.read('buildozer.spec', encoding='utf-8')
+          
+          # Проверяем наличие секций
+          assert 'app' in cfg, 'Missing [app] section in buildozer.spec'
+          assert 'android' in cfg, 'Missing [android] section in buildozer.spec'
+          
+          # Проверяем версии Android SDK
+          android_api = cfg.get('app', 'android.api', fallback='')
+          android_platform = cfg.get('android', 'android.platform', fallback='')
+          build_tools = cfg.get('android', 'android.build_tools', fallback='')
+          ndk_version = cfg.get('android', 'android.ndk', fallback='')
+          
+          print(f'Android API: {android_api}')
+          print(f'Android Platform: {android_platform}')
+          print(f'Build Tools: {build_tools}')
+          print(f'NDK Version: {ndk_version}')
+          
+          # Проверяем соответствие стабильным версиям
+          assert android_api == '33', f'Expected android.api=33, got {android_api}'
+          assert android_platform == 'android-33', f'Expected android.platform=android-33, got {android_platform}'
+          assert build_tools == '34.0.0', f'Expected android.build_tools=34.0.0, got {build_tools}'
+          assert ndk_version == '25.2.9519653', f'Expected android.ndk=25.2.9519653, got {ndk_version}'
+          
+          print('buildozer.spec validation: PASSED')
+          " | tee -a logs/summary.txt
 
-      - name: Build debug APK (verbose, logged)
+      - name: Build APK (verbose, logged)
         run: |
           set -euo pipefail
           mkdir -p logs
-          ( set -x; buildozer -v android debug ) 2>&1 | tee logs/buildozer_build.log
+          
+          # Определяем тип сборки
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          echo "Building $BUILD_TYPE APK..." | tee -a logs/summary.txt
+          
+          # Сборка с детальным логированием
+          ( set -x; buildozer -v android $BUILD_TYPE ) 2>&1 | tee logs/buildozer_build.log
+          
+          # Проверяем результат сборки
+          if [ -f "bin/*.apk" ]; then
+            echo "APK build: SUCCESS" | tee -a logs/summary.txt
+            ls -la bin/*.apk | tee -a logs/summary.txt
+          else
+            echo "APK build: FAILED - no APK files found" | tee -a logs/summary.txt
+            exit 1
+          fi
 
       - name: List build outputs
         run: |
           mkdir -p logs
+          echo "=== Build Outputs ===" | tee -a logs/summary.txt
           ls -la bin | tee -a logs/summary.txt || true
+          
+          # Проверяем размер APK файлов
+          if [ -d "bin" ]; then
+            echo "=== APK File Sizes ===" | tee -a logs/summary.txt
+            find bin -name "*.apk" -exec ls -lh {} \; | tee -a logs/summary.txt
+          fi
+          
           echo "Build finished at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
 
       - name: Job summary (quick view)
         if: always()
         run: |
           {
-            echo "## CNC Checklist – CI summary"
+            echo "## CNC Checklist v1.3 – CI Build Summary"
             echo ""
+            echo "**Build Type**: ${{ github.event.inputs.build_type || 'debug' }}"
             echo "**System**: Java $(java -version 2>&1 | head -n1), Python $(python --version 2>&1)"
+            echo "**Android SDK**: Platform $ANDROID_PLATFORM, Build Tools $ANDROID_BUILD_TOOLS, NDK $ANDROID_NDK_VERSION"
             echo "**SDK root**: $ANDROID_HOME"
-            echo "**Outputs**:"
-            ls -la bin || echo "no bin/"
+            echo ""
+            echo "**Build Outputs**:"
+            if [ -d "bin" ]; then
+              ls -la bin || echo "bin/ directory exists but is empty"
+            else
+              echo "No bin/ directory found"
+            fi
+            echo ""
+            echo "**Build Status**: ${{ job.status }}"
           } >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APK/AAB artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cnc-checklist-apk
+          name: cnc-checklist-v1.3-${{ github.event.inputs.build_type || 'debug' }}-apk
           path: |
             bin/*.apk
             bin/*.aab
           if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload CI logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-logs
+          name: cnc-checklist-v1.3-ci-logs
           path: |
-            logs/**
+            logs/** 
             .buildozer/**/*.log
             .buildozer/**/build*.txt
             .buildozer/android/platform/python-for-android/*.log
           if-no-files-found: warn
+          retention-days: 7
