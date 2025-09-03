@@ -33,7 +33,7 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip libstdc++6 libffi-dev libssl-dev zlib1g-dev libncurses5 libncurses5-dev libtinfo5
+          sudo apt-get install -y git zip unzip libstdc++6 libffi-dev libssl-dev zlib1g-dev libncurses6 libtinfo6
 
       - name: Create SDK/NDK dirs
         run: |
@@ -90,3 +90,4 @@ jobs:
             bin/*.apk
             bin/*.aab
           if-no-files-found: warn
+
