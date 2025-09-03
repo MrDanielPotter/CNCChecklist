@@ -47,6 +47,8 @@ jobs:
       # Переменные для исправления autotools
       AUTOTOOLS_ACLOCAL: "/usr/share/aclocal"
       AUTOTOOLS_M4: "/usr/share/aclocal"
+      # Максимальный уровень логирования для buildozer
+      BUILDIZER_LOG_LEVEL: "2"
       # Используем sdl2 bootstrap для Kivy
       P4A_BOOTSTRAP: "sdl2"
       # Используем стабильную ветку python-for-android
@@ -632,6 +634,7 @@ jobs:
           P4A_RECIPE_BLACKLIST: ${{ env.P4A_RECIPE_BLACKLIST }}
           P4A_BOOTSTRAP: ${{ env.P4A_BOOTSTRAP }}
           P4A_BRANCH: ${{ env.P4A_BRANCH }}
+          BUILDIZER_LOG_LEVEL: ${{ env.BUILDIZER_LOG_LEVEL }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -905,7 +908,7 @@ jobs:
           ls -la *.gradle* gradle-wrapper.properties 2>/dev/null | tee -a logs/buildozer_build.log || \
             echo "No Gradle symlinks found" | tee -a logs/buildozer_build.log
           
-          if buildozer android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
+          if buildozer android $BUILD_TYPE --log-level $BUILDIZER_LOG_LEVEL 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
           else
             BUILD_EXIT_CODE=$?
@@ -913,20 +916,28 @@ jobs:
             echo "Trying with verbose flag..." | tee -a logs/summary.txt
             
             # Попробуем с verbose флагом
-            if buildozer -v android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
+            if buildozer -v android $BUILD_TYPE --log-level $BUILDIZER_LOG_LEVEL 2>&1 | tee -a logs/buildozer_build.log; then
               echo "Buildozer command with verbose completed successfully" | tee -a logs/summary.txt
             else
               BUILD_EXIT_CODE=$?
               echo "Buildozer command with verbose also failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
-              echo "== Last 100 lines of build log ==" | tee -a logs/summary.txt
-              tail -100 logs/buildozer_build.log | tee -a logs/summary.txt
-              echo "== Full buildozer log for debugging ==" | tee -a logs/summary.txt
-              cat logs/buildozer_build.log | tee -a logs/summary.txt
-              echo "== Current directory contents ==" | tee -a logs/summary.txt
-              ls -la | tee -a logs/summary.txt
-              echo "== .buildozer directory contents ==" | tee -a logs/summary.txt
-              find .buildozer -type f 2>/dev/null | head -20 | tee -a logs/summary.txt || echo "No .buildozer files found" | tee -a logs/summary.txt
-              exit $BUILD_EXIT_CODE
+              echo "Trying with log level 2..." | tee -a logs/summary.txt
+              # Попробуем с максимальным уровнем логирования
+              if buildozer -v android $BUILD_TYPE --log-level 2 2>&1 | tee -a logs/buildozer_build.log; then
+                echo "Buildozer command with log level 2 completed successfully" | tee -a logs/summary.txt
+              else
+                BUILD_EXIT_CODE=$?
+                echo "Buildozer command with log level 2 also failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
+                echo "== Last 100 lines of build log ==" | tee -a logs/summary.txt
+                tail -100 logs/buildozer_build.log | tee -a logs/summary.txt
+                echo "== Full buildozer log for debugging ==" | tee -a logs/summary.txt
+                cat logs/buildozer_build.log | tee -a logs/summary.txt
+                echo "== Current directory contents ==" | tee -a logs/summary.txt
+                ls -la | tee -a logs/summary.txt
+                echo "== .buildozer directory contents ==" | tee -a logs/summary.txt
+                find .buildozer -type f 2>/dev/null | head -20 | tee -a logs/summary.txt || echo "No .buildozer files found" | tee -a logs/summary.txt
+                exit $BUILD_EXIT_CODE
+              fi
             fi
           fi
           
