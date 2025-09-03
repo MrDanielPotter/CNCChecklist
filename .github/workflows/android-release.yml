@@ -33,6 +33,11 @@ jobs:
       # Обход проблем с libffi
       LIBFFI_CFLAGS: "-I/usr/include/arm-linux-gnueabihf"
       LIBFFI_LIBS: "-lffi"
+      # Отключаем проблемные макросы autoconf
+      AUTOCONF_VERSION: "2.71"
+      AUTOMAKE_VERSION: "1.16"
+      # Переменные для обхода проблем с libffi
+      LT_SYS_SYMBOL_USCORE: "no"
 
     steps:
       - name: Checkout
@@ -63,7 +68,10 @@ jobs:
         run: |
           set -euxo pipefail
           sudo apt-get update
+          # Устанавливаем более новые версии autotools
           sudo apt-get install -y autoconf automake libtool libtool-bin pkg-config autoconf-archive
+          # Устанавливаем дополнительные пакеты для libffi
+          sudo apt-get install -y libffi-dev libffi8
           # Проверяем версии
           autoconf --version
           automake --version
@@ -76,6 +84,8 @@ jobs:
             sudo ln -sf $(which libtool-bin) /usr/bin/libtool
             echo "Created symlink: libtool -> libtool-bin"
           fi
+          # Проверяем libffi
+          pkg-config --modversion libffi || echo "libffi not found via pkg-config"
 
       - name: Install system deps (Ubuntu 24.04)
         run: |
@@ -508,6 +518,9 @@ jobs:
           ANDROIDMINAPI: ${{ env.ANDROIDMINAPI }}
           LIBFFI_CFLAGS: ${{ env.LIBFFI_CFLAGS }}
           LIBFFI_LIBS: ${{ env.LIBFFI_LIBS }}
+          AUTOCONF_VERSION: ${{ env.AUTOCONF_VERSION }}
+          AUTOMAKE_VERSION: ${{ env.AUTOMAKE_VERSION }}
+          LT_SYS_SYMBOL_USCORE: ${{ env.LT_SYS_SYMBOL_USCORE }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -604,6 +617,12 @@ jobs:
           else
             echo "❌ aidl not found in buildozer SDK directory" | tee -a logs/buildozer_build.log
           fi
+          
+          # Попытка обхода проблем с libffi
+          echo "== Attempting libffi workaround ==" | tee -a logs/buildozer_build.log
+          export LT_SYS_SYMBOL_USCORE=no
+          export AUTOCONF_VERSION=2.71
+          export AUTOMAKE_VERSION=1.16
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
