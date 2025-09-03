@@ -105,38 +105,152 @@ jobs:
           # Скачиваем build-tools напрямую
           echo "Downloading build-tools 34.0.0 directly..."
           cd build-tools
-          curl -sSL "https://dl.google.com/android/repository/build-tools_r34.0.0-linux.zip" -o build-tools-34.0.0.zip
-          if [ -f "build-tools-34.0.0.zip" ]; then
-            unzip -q build-tools-34.0.0.zip
-            # Переименовываем папку в правильное имя
-            if [ -d "android-11" ]; then
-              mv android-11 34.0.0
+          
+          # Пробуем несколько URL для build-tools
+          BUILD_TOOLS_URLS=(
+            "https://dl.google.com/android/repository/build-tools_r34.0.0-linux.zip"
+            "https://dl.google.com/android/repository/build-tools_r33.0.2-linux.zip"
+            "https://dl.google.com/android/repository/build-tools_r30.0.3-linux.zip"
+          )
+          
+          BUILD_TOOLS_DOWNLOADED=false
+          for url in "${BUILD_TOOLS_URLS[@]}"; do
+            echo "Trying to download from: $url"
+            if curl -sSL "$url" -o build-tools.zip; then
+              # Проверяем, что файл скачался и не пустой
+              if [ -f "build-tools.zip" ] && [ -s "build-tools.zip" ]; then
+                echo "File downloaded, size: $(stat -c%s build-tools.zip) bytes"
+                
+                # Проверяем, что это валидный zip файл
+                if unzip -t build-tools.zip >/dev/null 2>&1; then
+                  echo "Valid zip file, extracting..."
+                  unzip -q build-tools.zip
+                  
+                  # Определяем версию и переименовываем папку
+                  if [ -d "android-11" ]; then
+                    mv android-11 34.0.0
+                    echo "✅ build-tools 34.0.0 downloaded and extracted"
+                  elif [ -d "android-10" ]; then
+                    mv android-10 33.0.2
+                    echo "✅ build-tools 33.0.2 downloaded and extracted"
+                  elif [ -d "android-9" ]; then
+                    mv android-9 30.0.3
+                    echo "✅ build-tools 30.0.3 downloaded and extracted"
+                  else
+                    # Ищем любую папку android-*
+                    ANDROID_DIR=$(find . -maxdepth 1 -type d -name "android-*" | head -1)
+                    if [ -n "$ANDROID_DIR" ]; then
+                      VERSION=$(basename "$ANDROID_DIR" | sed 's/android-//')
+                      mv "$ANDROID_DIR" "$VERSION"
+                      echo "✅ build-tools $VERSION downloaded and extracted"
+                    fi
+                  fi
+                  
+                  rm -f build-tools.zip
+                  BUILD_TOOLS_DOWNLOADED=true
+                  break
+                else
+                  echo "Invalid zip file, trying next URL..."
+                  rm -f build-tools.zip
+                fi
+              else
+                echo "File download failed or empty, trying next URL..."
+                rm -f build-tools.zip
+              fi
+            else
+              echo "Failed to download from $url, trying next URL..."
             fi
-            rm -f build-tools-34.0.0.zip
-            echo "✅ build-tools 34.0.0 downloaded and extracted"
+          done
+          
+          if [ "$BUILD_TOOLS_DOWNLOADED" = false ]; then
+            echo "❌ Failed to download any build-tools version"
+            exit 1
           fi
+          
           cd ..
           
           # Скачиваем platform-tools
           echo "Downloading platform-tools..."
           cd platform-tools
-          curl -sSL "https://dl.google.com/android/repository/platform-tools_r34.0.5-linux.zip" -o platform-tools.zip
-          if [ -f "platform-tools.zip" ]; then
-            unzip -q platform-tools.zip
-            rm -f platform-tools.zip
-            echo "✅ platform-tools downloaded and extracted"
+          
+          PLATFORM_TOOLS_URLS=(
+            "https://dl.google.com/android/repository/platform-tools_r34.0.5-linux.zip"
+            "https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip"
+            "https://dl.google.com/android/repository/platform-tools_r30.0.5-linux.zip"
+          )
+          
+          PLATFORM_TOOLS_DOWNLOADED=false
+          for url in "${PLATFORM_TOOLS_URLS[@]}"; do
+            echo "Trying to download platform-tools from: $url"
+            if curl -sSL "$url" -o platform-tools.zip; then
+              if [ -f "platform-tools.zip" ] && [ -s "platform-tools.zip" ]; then
+                echo "Platform-tools downloaded, size: $(stat -c%s platform-tools.zip) bytes"
+                if unzip -t platform-tools.zip >/dev/null 2>&1; then
+                  unzip -q platform-tools.zip
+                  rm -f platform-tools.zip
+                  echo "✅ platform-tools downloaded and extracted"
+                  PLATFORM_TOOLS_DOWNLOADED=true
+                  break
+                else
+                  echo "Invalid platform-tools zip file, trying next URL..."
+                  rm -f platform-tools.zip
+                fi
+              else
+                echo "Platform-tools download failed or empty, trying next URL..."
+                rm -f platform-tools.zip
+              fi
+            else
+              echo "Failed to download platform-tools from $url, trying next URL..."
+            fi
+          done
+          
+          if [ "$PLATFORM_TOOLS_DOWNLOADED" = false ]; then
+            echo "❌ Failed to download platform-tools"
+            exit 1
           fi
+          
           cd ..
           
           # Скачиваем platform android-33
           echo "Downloading platform android-33..."
           cd platforms
-          curl -sSL "https://dl.google.com/android/repository/platform-33_r03.zip" -o platform-33.zip
-          if [ -f "platform-33.zip" ]; then
-            unzip -q platform-33.zip
-            rm -f platform-33.zip
-            echo "✅ platform android-33 downloaded and extracted"
+          
+          PLATFORM_URLS=(
+            "https://dl.google.com/android/repository/platform-33_r03.zip"
+            "https://dl.google.com/android/repository/platform-32_r01.zip"
+            "https://dl.google.com/android/repository/platform-31_r01.zip"
+          )
+          
+          PLATFORM_DOWNLOADED=false
+          for url in "${PLATFORM_URLS[@]}"; do
+            echo "Trying to download platform from: $url"
+            if curl -sSL "$url" -o platform.zip; then
+              if [ -f "platform.zip" ] && [ -s "platform.zip" ]; then
+                echo "Platform downloaded, size: $(stat -c%s platform.zip) bytes"
+                if unzip -t platform.zip >/dev/null 2>&1; then
+                  unzip -q platform.zip
+                  rm -f platform.zip
+                  echo "✅ platform downloaded and extracted"
+                  PLATFORM_DOWNLOADED=true
+                  break
+                else
+                  echo "Invalid platform zip file, trying next URL..."
+                  rm -f platform.zip
+                fi
+              else
+                echo "Platform download failed or empty, trying next URL..."
+                rm -f platform.zip
+              fi
+            else
+              echo "Failed to download platform from $url, trying next URL..."
+            fi
+          done
+          
+          if [ "$PLATFORM_DOWNLOADED" = false ]; then
+            echo "❌ Failed to download platform"
+            exit 1
           fi
+          
           cd ..
           
           # Проверяем установку
