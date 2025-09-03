@@ -463,22 +463,22 @@ jobs:
 
       - name: Fix autotools compatibility for libffi
         run: |
-           set -euxo pipefail
-           echo "== Fixing autotools compatibility for libffi =="
-           
-           # Создаем символическую ссылку для LT_SYS_SYMBOL_USCORE
-           echo "Creating compatibility symlink for LT_SYS_SYMBOL_USCORE"
-           sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
-           
-           # Устанавливаем переменные окружения для совместимости
-           export LT_SYS_SYMBOL_USCORE=no
-           echo "LT_SYS_SYMBOL_USCORE=no" >> $GITHUB_ENV
-           
-           # Проверяем версии autotools
-           echo "Autotools versions:"
-           autoconf --version | head -1
-           automake --version | head -1
-           libtool --version | head -1
+          set -euxo pipefail
+          echo "== Fixing autotools compatibility for libffi =="
+          
+          # Создаем символическую ссылку для LT_SYS_SYMBOL_USCORE
+          echo "Creating compatibility symlink for LT_SYS_SYMBOL_USCORE"
+          sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
+          
+          # Устанавливаем переменные окружения для совместимости
+          export LT_SYS_SYMBOL_USCORE=no
+          echo "LT_SYS_SYMBOL_USCORE=no" >> $GITHUB_ENV
+          
+          # Проверяем версии autotools
+          echo "Autotools versions:"
+          autoconf --version | head -1 || true
+          automake --version | head -1 || true
+          libtool --version | head -1 || true
 
       - name: Install buildozer & Python deps
         run: |
