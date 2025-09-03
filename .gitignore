@@ -1,0 +1,6 @@
+.buildozer/
+bin/
+*.pyc
+__pycache__/
+*.log
+app/assets/fonts/*.ttf

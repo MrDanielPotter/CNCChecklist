@@ -1,0 +1,5 @@
+kivy==2.3.0
+pillow
+reportlab
+androidstorage4kivy>=0.1.0
+plyer

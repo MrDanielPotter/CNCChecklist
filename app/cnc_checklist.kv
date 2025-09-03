@@ -1,0 +1,149 @@
+#:kivy 2.3.0
+
+<ColoredBtn@Button>:
+    font_size: '20sp'
+    size_hint_y: None
+    height: '64dp'
+    background_color: (0.15,0.5,0.2,1) if self.state=='normal' else (0.1,0.4,0.15,1)
+
+<LabelH1@Label>:
+    font_size: '22sp'
+<LabelH2@Label>:
+    font_size: '18sp'
+<TextBody@Label>:
+    text_size: self.width, None
+    size_hint_y: None
+    height: self.texture_size[1]+8
+    font_size: '16sp'
+
+<StartScreen@Screen>:
+    name: "start"
+    BoxLayout:
+        orientation: 'vertical'
+        padding: '16dp'
+        spacing: '12dp'
+        LabelH1:
+            text: "CNC Checklist – Нестинг"
+        TextInput:
+            id: order_inp
+            hint_text: "Номер заказа (123456_78)"
+            multiline: False
+            font_size: '20sp'
+            size_hint_y: None
+            height: '54dp'
+        BoxLayout:
+            size_hint_y: None
+            height: '56dp'
+            spacing: '12dp'
+            ColoredBtn:
+                text: "Начать"
+                on_release: app.start_session(order_inp.text)
+            ColoredBtn:
+                text: "История"
+                on_release: app.go_history()
+        Button:
+            text: "Настройки (админ-PIN)"
+            size_hint_y: None
+            height: '50dp'
+            on_release: app.open_settings()
+
+<ChecklistScreen@Screen>:
+    name: "checklist"
+    BoxLayout:
+        orientation: 'vertical'
+        padding: '10dp'
+        spacing: '10dp'
+        LabelH2:
+            id: header
+            text: ""
+        ProgressBar:
+            id: progress
+            max: 100
+            value: 0
+            size_hint_y: None
+            height: '8dp'
+        TextBody:
+            id: item_text
+            text: ""
+        BoxLayout:
+            size_hint_y: None; height: '48dp'; spacing: '8dp'
+            Button:
+                text: "Подсказка"
+                on_release: app.show_hint()
+            Button:
+                text: "Фото"
+                on_release: app.add_photo()
+            Button:
+                text: "Заметка"
+                on_release: app.add_note()
+        BoxLayout:
+            size_hint_y: None; height: '56dp'; spacing: '10dp'
+            Button:
+                text: "✗ Не выполнено"
+                background_color: (0.8,0.2,0.2,1)
+                on_release: app.mark(False)
+            Button:
+                text: "✓ Выполнено"
+                background_color: (0.15,0.65,0.25,1)
+                on_release: app.mark(True)
+            Button:
+                text: "Далее →"
+                on_release: app.next_item()
+        BoxLayout:
+            size_hint_y: None; height: '46dp'; spacing: '10dp'
+            Button:
+                text: "← Назад"
+                on_release: app.prev_item()
+            Button:
+                text: "Завершить и создать PDF"
+                on_release: app.finish_and_pdf()
+
+<HistoryScreen@Screen>:
+    name: "history"
+    BoxLayout:
+        orientation: 'vertical'
+        padding: '10dp'
+        spacing: '8dp'
+        LabelH1:
+            text: "История отчётов"
+        BoxLayout:
+            size_hint_y: None; height: '44dp'; spacing: '8dp'
+            TextInput:
+                id: filt_order; hint_text: "Фильтр по заказу"
+            TextInput:
+                id: filt_date; hint_text: "YYYY-MM-DD"
+            Button:
+                text: "Применить"
+                on_release: app.apply_history_filter(filt_order.text, filt_date.text)
+        ScrollView:
+            GridLayout:
+                id: hist_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: '6dp'
+
+<SettingsScreen@Screen>:
+    name: "settings"
+    BoxLayout:
+        orientation: 'vertical'; padding: '10dp'; spacing: '8dp'
+        LabelH1:
+            text: "Настройки"
+        Button:
+            text: "Сменить PIN-коды"
+            on_release: app.change_pins()
+        Button:
+            text: "Выбрать папку (SAF)"
+            on_release: app.choose_folder()
+        Button:
+            text: "Тест-PDF"
+            on_release: app.test_pdf()
+        Button:
+            text: "SMTP"
+            on_release: app.configure_smtp()
+        Button:
+            text: "Логи (CSV) — экспорт"
+            on_release: app.export_logs()
+        Button:
+            text: "← Назад"
+            on_release: app.go_start()
