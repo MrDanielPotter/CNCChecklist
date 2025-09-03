@@ -353,7 +353,7 @@ jobs:
           echo "== Accepting Android SDK licenses ==" | tee -a logs/system_info.txt
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses | tee -a logs/system_info.txt || true
           
-          # Устанавливаем все необходимые компоненты через sdkmanager
+          # Устанавливаем компоненты через sdkmanager
           echo "== Installing Android SDK components ==" | tee -a logs/system_info.txt
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
             "platform-tools" "platforms;android-32" "build-tools;34.0.0" "ndk;25.2.9519653" | tee -a logs/system_info.txt || true
@@ -472,7 +472,7 @@ jobs:
           echo "Creating compatibility symlink for LT_SYS_SYMBOL_USCORE"
           sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
           
-          # Устанавливаем переменные окружения для совместимости
+          # Устанавливаем переменные для совместимости
           export LT_SYS_SYMBOL_USCORE=no
           echo "LT_SYS_SYMBOL_USCORE=no" >> $GITHUB_ENV
           
@@ -661,15 +661,15 @@ jobs:
           rm -rf bin .buildozer
           mkdir -p bin
           
-          # Обновляем buildozer.spec с актуальными версиями и путями
-          echo "== Updating buildozer.spec with actual versions and paths ==" | tee -a logs/buildozer_build.log
+          # Обновляем buildozer.spec
+          echo "== Updating buildozer.spec ==" | tee -a logs/buildozer_build.log
           echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
           echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
           echo "ANDROID_PLATFORM: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
           echo "ANDROID_BUILD_TOOLS: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
           echo "ANDROID_NDK_VERSION: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
           
-          # Обновляем buildozer.spec с актуальными версиями и путями
+          # Обновляем buildozer.spec
           if [ -f "buildozer.spec" ]; then
             # Создаем резервную копию
             cp buildozer.spec buildozer.spec.backup
@@ -683,7 +683,7 @@ jobs:
             sed -i "s/android\.api = .*/android.api = $ANDROIDAPI/" buildozer.spec
             sed -i "s/android\.minapi = .*/android.minapi = $ANDROIDMINAPI/" buildozer.spec
             
-            echo "Updated buildozer.spec with actual versions and paths" | tee -a logs/buildozer_build.log
+            echo "Updated buildozer.spec" | tee -a logs/buildozer_build.log
             echo "Updated android.sdk_dir to: $ANDROID_HOME" | tee -a logs/buildozer_build.log
             echo "Updated android.ndk_dir to: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
             echo "Updated android.platform to: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
@@ -698,7 +698,7 @@ jobs:
           BUILDIZER_SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
           mkdir -p "$BUILDIZER_SDK_DIR"
           
-          # Создаем символические ссылки на наши установленные компоненты
+          # Создаем символические ссылки на компоненты
           ln -sf "$ANDROID_HOME/build-tools" "$BUILDIZER_SDK_DIR/build-tools" || true
           ln -sf "$ANDROID_HOME/platforms" "$BUILDIZER_SDK_DIR/platforms" || true
           ln -sf "$ANDROID_HOME/platform-tools" "$BUILDIZER_SDK_DIR/platform-tools" || true
@@ -713,7 +713,7 @@ jobs:
           echo "Checking platforms:" | tee -a logs/buildozer_build.log
           ls -la "$BUILDIZER_SDK_DIR/platforms/" | tee -a logs/buildozer_build.log || echo "platforms not found" | tee -a logs/buildozer_build.log
           
-          # Создаем старую структуру tools для совместимости с buildozer
+          # Создаем структуру tools для совместимости
           mkdir -p "$BUILDIZER_SDK_DIR/tools/bin"
           ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$BUILDIZER_SDK_DIR/tools/bin/sdkmanager" || true
           ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" "$BUILDIZER_SDK_DIR/tools/bin/avdmanager" || true
@@ -751,7 +751,7 @@ jobs:
           export P4A_BOOTSTRAP=sdl2
           export P4A_BRANCH=master
           
-          # Дополнительные переменные для полного исключения libffi
+          # Дополнительные переменные для libffi
           export LIBFFI_CFLAGS="-I/usr/include/arm-linux-gnueabihf"
           export LIBFFI_LIBS="-lffi"
           
@@ -768,7 +768,7 @@ jobs:
           buildozer android debug --help 2>&1 | head -20 | tee -a logs/buildozer_build.log || \
             echo "buildozer android debug --help failed" | tee -a logs/buildozer_build.log
           
-          # Проверяем, что buildozer может найти все необходимые компоненты
+          # Проверяем buildozer SDK detection
           echo "== Checking buildozer SDK detection ==" | tee -a logs/buildozer_build.log
           echo "Checking buildozer android status:" | tee -a logs/buildozer_build.log
           buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed" | tee -a logs/buildozer_build.log
@@ -786,7 +786,7 @@ jobs:
           buildozer android clean 2>&1 | tee -a logs/buildozer_build.log || \
             echo "buildozer clean failed (expected - may need dependencies)" | tee -a logs/buildozer_build.log
           
-          # Удаляем кеш buildozer для принудительного пересоздания
+          # Удаляем кеш buildozer
           echo "== Removing buildozer cache ==" | tee -a logs/buildozer_build.log
           rm -rf .buildozer || true
           
@@ -835,10 +835,10 @@ jobs:
           buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
             echo "buildozer android debug --help failed after init" | tee -a logs/buildozer_build.log
           
-          # Исправляем проблемы с libffi и autotools перед созданием проекта
+          # Исправляем проблемы с libffi и autotools
           echo "== Fixing libffi and autotools issues ==" | tee -a logs/buildozer_build.log
           
-          # Создаем необходимые символические ссылки для autotools
+          # Создаем символические ссылки для autotools
           sudo mkdir -p /usr/share/aclocal || true
           sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
           
@@ -893,7 +893,7 @@ jobs:
           buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
             echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
           
-          # Создаем символические ссылки на Gradle файлы для GitHub Actions
+          # Создаем символические ссылки на Gradle файлы
           echo "== Creating symlinks for Gradle files ==" | tee -a logs/buildozer_build.log
           if [ -d ".buildozer/android/platform/build-armeabi-v7a" ]; then
             find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | head -5 | while read file; do
@@ -941,7 +941,7 @@ jobs:
             fi
           fi
           
-          # После сборки создаем дополнительные символические ссылки
+          # Создаем дополнительные символические ссылки
           echo "== Creating additional symlinks after build ==" | tee -a logs/buildozer_build.log
           find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | while read file; do
             filename=$(basename "$file")
