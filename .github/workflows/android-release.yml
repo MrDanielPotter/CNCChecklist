@@ -893,20 +893,9 @@ jobs:
           buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
             echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
           
-          # Создаем символические ссылки на Gradle файлы
-          echo "== Creating symlinks for Gradle files ==" | tee -a logs/buildozer_build.log
-          if [ -d ".buildozer/android/platform/build-armeabi-v7a" ]; then
-            find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | head -5 | while read file; do
-              filename=$(basename "$file")
-              ln -sf "$file" "$filename" 2>/dev/null || true
-              echo "Created symlink: $filename -> $file" | tee -a logs/buildozer_build.log
-            done
-          fi
+
           
-          # Проверяем созданные символические ссылки
-          echo "== Checking created symlinks ==" | tee -a logs/buildozer_build.log
-          ls -la *.gradle* gradle-wrapper.properties 2>/dev/null | tee -a logs/buildozer_build.log || \
-            echo "No Gradle symlinks found" | tee -a logs/buildozer_build.log
+
           
           if buildozer android $BUILD_TYPE --log-level $BUILDIZER_LOG_LEVEL 2>&1 | tee -a logs/buildozer_build.log; then
             echo "Buildozer command completed successfully" | tee -a logs/summary.txt
@@ -941,21 +930,9 @@ jobs:
             fi
           fi
           
-          # Создаем дополнительные символические ссылки
-          echo "== Creating additional symlinks after build ==" | tee -a logs/buildozer_build.log
-          find .buildozer/android -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | while read file; do
-            filename=$(basename "$file")
-            if [ ! -e "$filename" ]; then
-              ln -sf "$file" "$filename" 2>/dev/null || true
-              echo "Created additional symlink: $filename -> $file" | tee -a logs/buildozer_build.log
-            fi
-          done
+
           
-          # Проверяем все Gradle файлы в проекте
-          echo "== Final check for Gradle files ==" | tee -a logs/buildozer_build.log
-          find . -name "*.gradle*" -o -name "gradle-wrapper.properties" 2>/dev/null | \
-            tee -a logs/buildozer_build.log || \
-            echo "No Gradle files found anywhere" | tee -a logs/buildozer_build.log
+
           
           # Проверяем результат сборки
           echo "== Checking build results ==" | tee -a logs/summary.txt
@@ -1022,6 +999,10 @@ jobs:
           echo "=== Build Outputs ===" | tee -a logs/summary.txt
           ls -la bin | tee -a logs/summary.txt || true
           
+          # Поиск APK файлов
+          echo "Searching APKs:" | tee -a logs/summary.txt
+          find . -type f \( -name "*.apk" -o -name "*.aab" \) -maxdepth 6 -print | tee -a logs/summary.txt
+          
           # Проверяем размер APK файлов
           if [ -d "bin" ]; then
             echo "=== APK File Sizes ===" | tee -a logs/summary.txt
@@ -1059,8 +1040,8 @@ jobs:
           path: |
             bin/*.apk
             bin/*.aab
-            .buildozer/android/platform/build-*/dist/*.apk
-            .buildozer/android/platform/build-*/dist/*.aab
+            .buildozer/**/dists/*/bin/*.apk
+            .buildozer/**/dists/*/bin/*.aab
           if-no-files-found: warn
           retention-days: 30
 
