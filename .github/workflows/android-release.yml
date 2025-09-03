@@ -561,7 +561,7 @@ jobs:
           assert android_minapi == '26', f'Expected android.minapi=26, got {android_minapi}'
           assert android_platform == 'android-32', f'Expected android.platform=android-32, got {android_platform}'
           assert build_tools == '34.0.0', f'Expected android.build_tools=34.0.0, got {build_tools}'
-          assert ndk_version == '25b', f'Expected android.ndk=25b, got {ndk_version}'
+          assert ndk_version == '25.2.9519653', f'Expected android.ndk=25.2.9519653, got {ndk_version}'
           
           print('buildozer.spec validation: PASSED')
           " | tee -a logs/summary.txt
@@ -698,6 +698,11 @@ jobs:
           export LIBFFI_CFLAGS="-I/usr/include/arm-linux-gnueabihf"
           export LIBFFI_LIBS="-lffi"
           
+          # Проверяем buildozer перед сборкой
+          echo "== Checking buildozer installation ==" | tee -a logs/buildozer_build.log
+          buildozer --version | tee -a logs/buildozer_build.log || echo "buildozer --version failed" | tee -a logs/buildozer_build.log
+          which buildozer | tee -a logs/buildozer_build.log
+          
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
           if buildozer -v android $BUILD_TYPE 2>&1 | tee -a logs/buildozer_build.log; then
@@ -731,6 +736,12 @@ jobs:
             fi
           else
             echo "APK build: FAILED - no files found in bin/" | tee -a logs/summary.txt
+            echo "Checking for any build artifacts..." | tee -a logs/summary.txt
+            find . -name "*.apk" -o -name "*.aab" 2>/dev/null | tee -a logs/summary.txt || echo "No APK/AAB files found anywhere" | tee -a logs/summary.txt
+            echo "Checking .buildozer directory..." | tee -a logs/summary.txt
+            ls -la .buildozer/ 2>/dev/null | tee -a logs/summary.txt || echo ".buildozer directory not found" | tee -a logs/summary.txt
+            echo "Last 100 lines of build log for debugging:" | tee -a logs/summary.txt
+            tail -100 logs/buildozer_build.log | tee -a logs/summary.txt
             echo "bin directory contents:" | tee -a logs/summary.txt
             ls -la bin/ 2>/dev/null | tee -a logs/summary.txt || echo "bin directory does not exist" | tee -a logs/summary.txt
             exit 1
