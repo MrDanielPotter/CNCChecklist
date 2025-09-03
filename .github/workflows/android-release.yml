@@ -89,7 +89,7 @@ jobs:
           yes | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
 
           install_pkg() {
-            local pkg="$1"
+            pkg="$1"
             echo "== Installing: $pkg =="
             for i in 1 2 3; do
               "$SDKM" --sdk_root="$SDKROOT" "$pkg" && break || {
@@ -131,13 +131,7 @@ jobs:
           set -euo pipefail
           test -f buildozer.spec || { echo "buildozer.spec not found"; exit 1; }
           head -n 5 buildozer.spec
-          python - << 'PY'
-import configparser
-cfg = configparser.ConfigParser()
-cfg.read('buildozer.spec', encoding='utf-8')
-assert 'app' in cfg, "Missing [app] section in buildozer.spec"
-print("buildozer.spec OK: [app] present")
-PY
+          python -c "import configparser,sys; cfg=configparser.ConfigParser(); cfg.read('buildozer.spec', encoding='utf-8'); assert 'app' in cfg, 'Missing [app] section in buildozer.spec'; print('buildozer.spec OK: [app] present')"
 
       - name: Build debug APK (verbose, logged)
         run: |
