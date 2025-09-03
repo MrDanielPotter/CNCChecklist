@@ -84,213 +84,100 @@ jobs:
           set -euxo pipefail
           mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME" logs
 
-      - name: Install Android commandline-tools (stable version)
+      - name: Install Android SDK (alternative method)
         run: |
           set -euxo pipefail
           mkdir -p logs
           cd "$ANDROID_HOME"
           
-          # Попробуем более старую стабильную версию commandline-tools
-          echo "Downloading commandline-tools 9477386 (stable version)..."
-          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdtools.zip
+          echo "== Installing Android SDK using alternative method =="
           
-          mkdir -p cmdline-tools
+          # Создаем структуру папок
+          mkdir -p build-tools platforms ndk platform-tools cmdline-tools/latest/bin
+          
+          # Скачиваем commandline-tools
+          echo "Downloading commandline-tools..."
+          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdtools.zip
           unzip -q cmdtools.zip -d cmdline-tools-tmp
-          mv cmdline-tools-tmp/cmdline-tools cmdline-tools/latest
+          mv cmdline-tools-tmp/cmdline-tools/* cmdline-tools/latest/
           rm -rf cmdline-tools-tmp cmdtools.zip
           
+          # Скачиваем build-tools напрямую
+          echo "Downloading build-tools 34.0.0 directly..."
+          cd build-tools
+          curl -sSL "https://dl.google.com/android/repository/build-tools_r34.0.0-linux.zip" -o build-tools-34.0.0.zip
+          if [ -f "build-tools-34.0.0.zip" ]; then
+            unzip -q build-tools-34.0.0.zip
+            # Переименовываем папку в правильное имя
+            if [ -d "android-11" ]; then
+              mv android-11 34.0.0
+            fi
+            rm -f build-tools-34.0.0.zip
+            echo "✅ build-tools 34.0.0 downloaded and extracted"
+          fi
+          cd ..
+          
+          # Скачиваем platform-tools
+          echo "Downloading platform-tools..."
+          cd platform-tools
+          curl -sSL "https://dl.google.com/android/repository/platform-tools_r34.0.5-linux.zip" -o platform-tools.zip
+          if [ -f "platform-tools.zip" ]; then
+            unzip -q platform-tools.zip
+            rm -f platform-tools.zip
+            echo "✅ platform-tools downloaded and extracted"
+          fi
+          cd ..
+          
+          # Скачиваем platform android-33
+          echo "Downloading platform android-33..."
+          cd platforms
+          curl -sSL "https://dl.google.com/android/repository/platform-33_r03.zip" -o platform-33.zip
+          if [ -f "platform-33.zip" ]; then
+            unzip -q platform-33.zip
+            rm -f platform-33.zip
+            echo "✅ platform android-33 downloaded and extracted"
+          fi
+          cd ..
+          
           # Проверяем установку
+          echo "== Verifying installation =="
+          ls -la build-tools/ || true
+          ls -la platforms/ || true
+          ls -la platform-tools/ || true
+          
+          # Проверяем sdkmanager
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version | tee -a logs/system_info.txt || true
           java -version 2>&1 | tee -a logs/system_info.txt || true
-          
-          # Создаем необходимые папки вручную
-          mkdir -p build-tools platforms ndk platform-tools
-          echo "Created Android SDK directories manually"
 
-      - name: Accept licenses & install SDK/NDK (robust, logged)
-        env:
-          SDKM: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin/sdkmanager
-          SDKROOT: ${{ env.ANDROID_HOME }}
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+      - name: Install NDK (if needed)
         run: |
           set -euo pipefail
           mkdir -p logs
-          exec &> >(tee -a logs/sdkmanager_install.log)
           
-          echo "== Environment setup =="
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "SDKROOT: $SDKROOT"
-          echo "SDKM: $SDKM"
-          echo "Current user: $(whoami)"
-          echo "Current directory: $(pwd)"
-          echo "Directory permissions:"
-          ls -la "$ANDROID_HOME" || true
-
-          echo "== Accept licenses (multiple attempts) =="
-          # Принимаем лицензии с несколькими попытками
-          for i in 1 2 3; do
-            echo "License acceptance attempt $i"
-            echo "y" | "$SDKM" --sdk_root="$SDKROOT" --licenses && break || {
-              echo "WARN: License acceptance attempt $i failed; retrying..."
-              sleep 3
-            }
-          done
+          echo "== Installing NDK =="
+          cd "$ANDROID_HOME/ndk"
           
-          # Дополнительная проверка лицензий
-          echo "== Verifying license acceptance =="
-          echo "y" | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
-
-          # Проверяем доступные пакеты
-          echo "== Available packages =="
-          "$SDKM" --sdk_root="$SDKROOT" --list | grep -E "(build-tools|platforms|ndk)" | head -20 || true
-          
-          # Проверяем доступные версии build-tools
-          echo "== Available build-tools versions =="
-          "$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" | head -10 || true
-
-          install_pkg() {
-            pkg="$1"
-            echo "== Installing: $pkg =="
-            for i in 1 2 3; do
-              echo "Attempt $i for $pkg"
-              
-              # Устанавливаем пакет
-              if "$SDKM" --sdk_root="$SDKROOT" --install "$pkg" --verbose; then
-                echo "SUCCESS: $pkg installation command completed"
-                
-                # Проверяем, что пакет действительно установился
-                if echo "$pkg" | grep -q "build-tools"; then
-                  VERSION=$(echo "$pkg" | cut -d';' -f2)
-                  echo "Checking for build-tools directory: $SDKROOT/build-tools/$VERSION"
-                  if [ -d "$SDKROOT/build-tools/$VERSION" ]; then
-                    echo "VERIFIED: build-tools $VERSION directory exists"
-                    ls -la "$SDKROOT/build-tools/$VERSION/" | head -5
-                  else
-                    echo "WARNING: build-tools $VERSION directory not found after installation"
-                    echo "Available build-tools directories:"
-                    ls -la "$SDKROOT/build-tools/" 2>/dev/null || echo "No build-tools directory"
-                  fi
-                elif echo "$pkg" | grep -q "platforms"; then
-                  VERSION=$(echo "$pkg" | cut -d';' -f2)
-                  if [ -d "$SDKROOT/platforms/$VERSION" ]; then
-                    echo "VERIFIED: platform $VERSION directory exists"
-                  else
-                    echo "WARNING: platform $VERSION directory not found after installation"
-                  fi
-                elif echo "$pkg" | grep -q "ndk"; then
-                  VERSION=$(echo "$pkg" | cut -d';' -f2)
-                  if [ -d "$SDKROOT/ndk/$VERSION" ]; then
-                    echo "VERIFIED: NDK $VERSION directory exists"
-                  else
-                    echo "WARNING: NDK $VERSION directory not found after installation"
-                  fi
-                fi
-                break
-              else
-                echo "WARN: attempt $i failed for $pkg; retrying in 5s..."
-                sleep 5
-              fi
-            done
-          }
-
-          # Устанавливаем только необходимые пакеты
-          install_pkg "platform-tools"
-          install_pkg "platforms;$ANDROID_PLATFORM"
-          
-          # Специальная обработка build-tools
-          echo "== Installing build-tools with fallback =="
-          BUILD_TOOLS_INSTALLED=false
-          
-          # Пробуем установить нужную версию
-          if install_pkg "build-tools;$ANDROID_BUILD_TOOLS"; then
-            if [ -d "$SDKROOT/build-tools/$ANDROID_BUILD_TOOLS" ]; then
-              BUILD_TOOLS_INSTALLED=true
-              echo "✅ Target build-tools $ANDROID_BUILD_TOOLS installed successfully"
+          # Скачиваем NDK
+          echo "Downloading NDK $ANDROID_NDK_VERSION..."
+          curl -sSL "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_VERSION-linux.zip" -o ndk.zip
+          if [ -f "ndk.zip" ]; then
+            unzip -q ndk.zip
+            # Переименовываем папку в правильное имя
+            if [ -d "android-ndk-$ANDROID_NDK_VERSION" ]; then
+              mv "android-ndk-$ANDROID_NDK_VERSION" "$ANDROID_NDK_VERSION"
             fi
+            rm -f ndk.zip
+            echo "✅ NDK $ANDROID_NDK_VERSION downloaded and extracted"
           fi
           
-          # Если не получилось, пробуем установить любую доступную версию
-          if [ "$BUILD_TOOLS_INSTALLED" = false ]; then
-            echo "== Trying to install any available build-tools =="
-            AVAILABLE_VERSIONS=$("$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" | head -5 | cut -d'|' -f1 | tr -d ' ' || true)
-            
-            for version in $AVAILABLE_VERSIONS; do
-              if [ -n "$version" ] && [ "$version" != "build-tools" ]; then
-                echo "Trying to install $version"
-                if install_pkg "$version"; then
-                  if [ -d "$SDKROOT/build-tools" ] && [ "$(ls -A "$SDKROOT/build-tools" 2>/dev/null)" ]; then
-                    BUILD_TOOLS_INSTALLED=true
-                    echo "✅ Successfully installed $version"
-                    break
-                  fi
-                fi
-              fi
-            done
-          fi
-          
-          # Если все еще не получилось, попробуем альтернативный способ
-          if [ "$BUILD_TOOLS_INSTALLED" = false ]; then
-            echo "== Trying alternative installation method =="
-            echo "Installing build-tools without --install flag..."
-            
-            # Пробуем без флага --install
-            "$SDKM" --sdk_root="$SDKROOT" "build-tools;34.0.0" || true
-            "$SDKM" --sdk_root="$SDKROOT" "build-tools;33.0.2" || true
-            "$SDKM" --sdk_root="$SDKROOT" "build-tools;30.0.3" || true
-            
-            # Проверяем результат
-            if [ -d "$SDKROOT/build-tools" ] && [ "$(ls -A "$SDKROOT/build-tools" 2>/dev/null)" ]; then
-              BUILD_TOOLS_INSTALLED=true
-              echo "✅ Alternative installation successful"
-            fi
-          fi
-          
-          if [ "$BUILD_TOOLS_INSTALLED" = false ]; then
-            echo "❌ Failed to install any build-tools"
-            echo "Available build-tools from sdkmanager:"
-            "$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" || true
-          fi
-          
-          install_pkg "ndk;$ANDROID_NDK_VERSION"
-
           # Создаем символическую ссылку на NDK
           ln -s "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME" || true
           
-          # Удаляем нестабильные версии build-tools если они установились
-          rm -rf "$ANDROID_HOME/build-tools/36.1.0-rc1" || true
-          rm -rf "$ANDROID_HOME/build-tools/36.1.0" || true
-
-          echo "== Post-installation diagnostics =="
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "SDKROOT: $SDKROOT"
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la "$ANDROID_HOME" || true
-          
-          echo "== Verify installed packages =="
-          if [ -d "$ANDROID_HOME/build-tools" ]; then
-            echo "build-tools directory exists:"
-            ls -la "$ANDROID_HOME/build-tools/" || true
-          else
-            echo "❌ build-tools directory does not exist!"
-            echo "Trying to create it manually..."
-            mkdir -p "$ANDROID_HOME/build-tools" || true
-          fi
-          
-          if [ -d "$ANDROID_HOME/platforms" ]; then
-            echo "platforms directory exists:"
-            ls -la "$ANDROID_HOME/platforms/" || true
-          else
-            echo "❌ platforms directory does not exist!"
-          fi
-          
-          if [ -d "$ANDROID_HOME/ndk" ]; then
-            echo "ndk directory exists:"
-            ls -la "$ANDROID_HOME/ndk/" || true
-          else
-            echo "❌ ndk directory does not exist!"
-          fi
+          echo "== Final verification =="
+          ls -la "$ANDROID_HOME/build-tools/" || true
+          ls -la "$ANDROID_HOME/platforms/" || true
+          ls -la "$ANDROID_HOME/ndk/" || true
+          ls -la "$ANDROID_HOME/platform-tools/" || true
           
           echo "== Check aidl availability =="
           find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null || echo "aidl not found"
@@ -298,42 +185,6 @@ jobs:
           echo "== Disk usage =="
           du -sh "$ANDROID_HOME" || true
           df -h || true
-          
-          echo "== Final sdkmanager list =="
-          "$SDKM" --sdk_root="$SDKROOT" --list | grep -E "(build-tools|platforms|ndk)" | head -10 || true
-          
-          # Если build-tools не установились, попробуем альтернативный способ
-          if [ ! -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ]; then
-            echo "== Attempting alternative build-tools installation =="
-            echo "Installing build-tools without --install flag..."
-            "$SDKM" --sdk_root="$SDKROOT" "build-tools;$ANDROID_BUILD_TOOLS" || true
-            
-            # Проверяем еще раз
-            if [ -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ]; then
-              echo "✅ Alternative installation successful"
-            else
-              echo "❌ Alternative installation also failed"
-              echo "Available build-tools versions:"
-              "$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" || true
-            fi
-          fi
-          
-          # Финальная проверка и создание папок
-          echo "== Final directory structure check =="
-          mkdir -p "$ANDROID_HOME/build-tools" "$ANDROID_HOME/platforms" "$ANDROID_HOME/ndk" "$ANDROID_HOME/platform-tools"
-          
-          # Проверяем, есть ли хотя бы что-то в папках
-          if [ ! "$(ls -A "$ANDROID_HOME/build-tools" 2>/dev/null)" ]; then
-            echo "⚠️  build-tools directory is empty, trying to download manually..."
-            # Попробуем скачать build-tools напрямую
-            cd "$ANDROID_HOME/build-tools"
-            curl -sSL "https://dl.google.com/android/repository/build-tools_r34.0.0-linux.zip" -o build-tools-34.0.0.zip || true
-            if [ -f "build-tools-34.0.0.zip" ]; then
-              unzip -q build-tools-34.0.0.zip || true
-              rm -f build-tools-34.0.0.zip || true
-              echo "✅ Downloaded build-tools manually"
-            fi
-          fi
 
       - name: Install buildozer & Python deps
         run: |
@@ -346,11 +197,6 @@ jobs:
           pip list | grep -E "(buildozer|kivy|pillow|reportlab)" | tee -a logs/system_info.txt
 
       - name: Verify Android SDK installation
-        env:
-          SDKM: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin/sdkmanager
-          SDKROOT: ${{ env.ANDROID_HOME }}
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -euo pipefail
           echo "=== Android SDK Verification ===" | tee -a logs/summary.txt
@@ -371,33 +217,7 @@ jobs:
               export ANDROID_BUILD_TOOLS="$AVAILABLE_BUILD_TOOLS"
             else
               echo "❌ No build-tools available at all" | tee -a logs/summary.txt
-              echo "Trying to install build-tools manually..." | tee -a logs/summary.txt
-              
-              # Попробуем установить build-tools вручную
-              echo "Accepting licenses before manual installation..."
-              echo "y" | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
-              
-              echo "Trying to install build-tools 34.0.0..."
-              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;34.0.0" || true
-              
-              echo "Trying to install build-tools 33.0.2..."
-              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;33.0.2" || true
-              
-              echo "Trying to install build-tools 33.0.1..."
-              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;33.0.1" || true
-              
-              echo "Trying to install build-tools 30.0.3..."
-              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;30.0.3" || true
-              
-              # Проверяем еще раз
-              AVAILABLE_BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | head -1 || echo "")
-              if [ -n "$AVAILABLE_BUILD_TOOLS" ]; then
-                echo "✅ Successfully installed build-tools: $AVAILABLE_BUILD_TOOLS" | tee -a logs/summary.txt
-                export ANDROID_BUILD_TOOLS="$AVAILABLE_BUILD_TOOLS"
-              else
-                echo "❌ Still no build-tools available after manual installation" | tee -a logs/summary.txt
-                exit 1
-              fi
+              exit 1
             fi
           fi
           
