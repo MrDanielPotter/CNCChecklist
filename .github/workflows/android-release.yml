@@ -14,7 +14,6 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
       PIP_DISABLE_PIP_VERSION_CHECK: 1
-      # Больше подробностей от p4a/buildozer
       P4A_DEBUG: "1"
 
     steps:
@@ -26,7 +25,6 @@ jobs:
           mkdir -p logs
           echo "Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
 
-      # Java 17 требуется для последних commandline-tools/sdkmanager
       - name: Set up Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
@@ -49,33 +47,34 @@ jobs:
 
       - name: System info (env, versions, disk)
         run: |
-          set -euo pipefail
+          mkdir -p logs
           {
-            echo "=== ENV (top) ==="; printenv | sort
+            echo "=== ENV ==="; printenv | sort
             echo; echo "=== Versions ==="
-            echo "java -version:"; java -version 2>&1 || true
-            echo "python --version:"; python --version 2>&1 || true
-            echo "pip --version:"; pip --version 2>&1 || true
-            echo; echo "=== Disk usage (top) ==="
+            java -version 2>&1 || true
+            python --version 2>&1 || true
+            pip --version 2>&1 || true
+            echo; echo "=== Disk usage ==="
             df -h
           } | tee logs/system_info.txt
 
       - name: Prepare SDK/NDK folders
         run: |
           set -euxo pipefail
-          mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME"
+          mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME" logs
 
       - name: Install Android commandline-tools (latest)
         run: |
           set -euxo pipefail
+          mkdir -p logs
           cd "$ANDROID_HOME"
           curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdtools.zip
           mkdir -p cmdline-tools
           unzip -q cmdtools.zip -d cmdline-tools-tmp
           mv cmdline-tools-tmp/cmdline-tools cmdline-tools/latest
           rm -rf cmdline-tools-tmp cmdtools.zip
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version | tee -a logs/system_info.txt
-          java -version 2>&1 | tee -a logs/system_info.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version | tee -a logs/system_info.txt || true
+          java -version 2>&1 | tee -a logs/system_info.txt || true
 
       - name: Accept licenses & install SDK/NDK (robust, logged)
         env:
@@ -83,10 +82,10 @@ jobs:
           SDKROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -euo pipefail
-
+          mkdir -p logs
           exec &> >(tee -a logs/sdkmanager_install.log)
 
-          echo "== Accept licenses (ignore non-zero due to pipe) =="
+          echo "== Accept licenses =="
           yes | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
 
           install_pkg() {
@@ -106,8 +105,6 @@ jobs:
           install_pkg "ndk;25.2.9519653"
 
           ln -s "$ANDROID_HOME/ndk/25.2.9519653" "$ANDROID_NDK_HOME" || true
-
-          # возможный битый симлинк от старых билдов
           if [ -L "$ANDROID_HOME/build-tools/36.1.0-rc1" ]; then rm -f "$ANDROID_HOME/build-tools/36.1.0-rc1"; fi
 
           echo "== Verify installed list (head) =="
@@ -125,19 +122,19 @@ jobs:
       - name: Download DejaVuSans.ttf (for Cyrillic PDF)
         run: |
           set -euxo pipefail
-          mkdir -p app/assets/fonts
+          mkdir -p app/assets/fonts logs
           curl -sSL "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf" -o app/assets/fonts/DejaVuSans.ttf
           ls -lh app/assets/fonts | tee -a logs/system_info.txt
 
       - name: Build debug APK (verbose, logged)
         run: |
           set -euo pipefail
-          # подробный лог сборки
+          mkdir -p logs
           ( set -x; buildozer -v android debug ) 2>&1 | tee logs/buildozer_build.log
 
       - name: List build outputs
         run: |
-          set -euo pipefail
+          mkdir -p logs
           ls -la bin | tee -a logs/summary.txt || true
           echo "Build finished at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
 
