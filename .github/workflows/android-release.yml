@@ -28,8 +28,8 @@ jobs:
       ANDROID_PLATFORM: "android-12"
       ANDROID_BUILD_TOOLS: "34.0.0"
       ANDROID_NDK_VERSION: "25.2.9519653"
-      ANDROIDAPI: "32"
-      ANDROIDMINAPI: "32"
+      ANDROIDAPI: "31"
+      ANDROIDMINAPI: "31"
       # Обход проблем с libffi
       LIBFFI_CFLAGS: "-I/usr/include/arm-linux-gnueabihf"
       LIBFFI_LIBS: "-lffi"
@@ -388,7 +388,24 @@ jobs:
           ls -la "$ANDROID_HOME/platform-tools/" || true
           
           echo "== Check aidl availability =="
-          find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null || echo "aidl not found"
+          AIDL_PATHS=$(find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null || echo "")
+          if [ -n "$AIDL_PATHS" ]; then
+            echo "✅ aidl found at:"
+            echo "$AIDL_PATHS"
+            # Проверяем, что aidl исполняемый
+            for aidl_path in $AIDL_PATHS; do
+              if [ -x "$aidl_path" ]; then
+                echo "✅ $aidl_path is executable"
+                "$aidl_path" --help | head -5 || true
+              else
+                echo "⚠️  $aidl_path is not executable"
+              fi
+            done
+          else
+            echo "❌ aidl not found in Android SDK"
+            echo "Available files in build-tools:"
+            find "$ANDROID_HOME/build-tools" -name "*aidl*" 2>/dev/null || echo "No aidl-related files found"
+          fi
           
           echo "== Disk usage =="
           du -sh "$ANDROID_HOME" || true
@@ -508,7 +525,7 @@ jobs:
           print(f'NDK Version: {ndk_version}')
           
           # Проверяем соответствие стабильным версиям
-          assert android_api == '32', f'Expected android.api=32, got {android_api}'
+          assert android_api == '31', f'Expected android.api=31, got {android_api}'
           assert android_platform == 'android-12', f'Expected android.platform=android-12, got {android_platform}'
           assert build_tools == '34.0.0', f'Expected android.build_tools=34.0.0, got {build_tools}'
           assert ndk_version == '25.2.9519653', f'Expected android.ndk=25.2.9519653, got {ndk_version}'
