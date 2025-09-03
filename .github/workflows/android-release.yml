@@ -33,21 +33,18 @@ jobs:
       # Обход проблем с libffi
       LIBFFI_CFLAGS: "-I/usr/include/arm-linux-gnueabihf"
       LIBFFI_LIBS: "-lffi"
+      # Полное исключение libffi
+      P4A_LIBFFI_SKIP: "1"
+      P4A_USE_SYSTEM_LIBFFI: "1"
+      P4A_RECIPE_BLACKLIST: "libffi"
       # Отключаем проблемные макросы autoconf
       AUTOCONF_VERSION: "2.71"
       AUTOMAKE_VERSION: "1.16"
-      # Переменные для обхода проблем с libffi
       LT_SYS_SYMBOL_USCORE: "no"
-      # Используем системную версию libffi
-      P4A_USE_SYSTEM_LIBFFI: "1"
-      # Отключаем компиляцию libffi
-      P4A_LIBFFI_SKIP: "1"
-      # Исключаем libffi из рецептов
-      P4A_RECIPE_BLACKLIST: "libffi"
       # Используем sdl2 bootstrap для Kivy
       P4A_BOOTSTRAP: "sdl2"
-      # Используем более новую ветку python-for-android
-      P4A_BRANCH: "develop"
+      # Используем стабильную ветку python-for-android
+      P4A_BRANCH: "master"
 
     steps:
       - name: Checkout
@@ -687,7 +684,11 @@ jobs:
           export P4A_LIBFFI_SKIP=1
           export P4A_RECIPE_BLACKLIST=libffi
           export P4A_BOOTSTRAP=sdl2
-          export P4A_BRANCH=develop
+          export P4A_BRANCH=master
+          
+          # Дополнительные переменные для полного исключения libffi
+          export LIBFFI_CFLAGS="-I/usr/include/arm-linux-gnueabihf"
+          export LIBFFI_LIBS="-lffi"
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
