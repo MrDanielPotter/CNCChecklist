@@ -27,8 +27,8 @@ p4a.bootstrap = sdl2
 android.permissions = INTERNET, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED
 
 # целевая/минимальная платформа
-android.api = 31
-android.minapi = 31
+android.api = 32
+android.minapi = 32
 android.archs = arm64-v8a
 
 # опционально: логи Kivy
@@ -46,6 +46,6 @@ bin_dir = bin
 accept_sdk_license = True
 p4a.branch = master
 # Стабильные версии Android SDK
-android.platform = android-12
+android.platform = android-32
 android.build_tools = 34.0.0
 android.ndk = 25.2.9519653

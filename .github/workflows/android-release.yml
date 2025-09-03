@@ -25,11 +25,11 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       P4A_DEBUG: "1"
       # Стабильные версии Android SDK (соответствуют buildozer.spec)
-      ANDROID_PLATFORM: "android-12"
+      ANDROID_PLATFORM: "android-32"
       ANDROID_BUILD_TOOLS: "34.0.0"
       ANDROID_NDK_VERSION: "25.2.9519653"
-      ANDROIDAPI: "31"
-      ANDROIDMINAPI: "31"
+      ANDROIDAPI: "32"
+      ANDROIDMINAPI: "32"
       # Обход проблем с libffi
       LIBFFI_CFLAGS: "-I/usr/include/arm-linux-gnueabihf"
       LIBFFI_LIBS: "-lffi"
@@ -321,7 +321,7 @@ jobs:
           # Проверяем sdkmanager
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version | tee -a logs/system_info.txt || true
           java -version 2>&1 | tee -a logs/system_info.txt || true
-          
+
           # Принимаем лицензии Android SDK
           echo "== Accepting Android SDK licenses ==" | tee -a logs/system_info.txt
           echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses | tee -a logs/system_info.txt || true
@@ -330,9 +330,9 @@ jobs:
           echo "== Checking available platforms ==" | tee -a logs/system_info.txt
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list | grep "platforms;" | tee -a logs/system_info.txt || true
           
-          # Устанавливаем platform android-12 (API 31) - доступный в системе
-          echo "== Installing platform android-12 (API 31) ==" | tee -a logs/system_info.txt
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-12" | tee -a logs/system_info.txt || true
+          # Устанавливаем platform android-32 (API 32) - доступный в системе
+          echo "== Installing platform android-32 (API 32) ==" | tee -a logs/system_info.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-32" | tee -a logs/system_info.txt || true
 
       - name: Install NDK (if needed)
         run: |
@@ -553,8 +553,8 @@ jobs:
           print(f'NDK Version: {ndk_version}')
           
           # Проверяем соответствие стабильным версиям
-          assert android_api == '31', f'Expected android.api=31, got {android_api}'
-          assert android_platform == 'android-12', f'Expected android.platform=android-12, got {android_platform}'
+          assert android_api == '32', f'Expected android.api=32, got {android_api}'
+          assert android_platform == 'android-32', f'Expected android.platform=android-32, got {android_platform}'
           assert build_tools == '34.0.0', f'Expected android.build_tools=34.0.0, got {build_tools}'
           assert ndk_version == '25.2.9519653', f'Expected android.ndk=25.2.9519653, got {ndk_version}'
           
