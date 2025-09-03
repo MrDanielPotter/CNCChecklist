@@ -718,6 +718,27 @@ jobs:
           echo "Checking if buildozer can find SDK:" | tee -a logs/buildozer_build.log
           buildozer android debug --help 2>&1 | head -20 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed" | tee -a logs/buildozer_build.log
           
+          # Проверяем, что buildozer может найти все необходимые компоненты
+          echo "== Checking buildozer SDK detection ==" | tee -a logs/buildozer_build.log
+          echo "Checking buildozer android status:" | tee -a logs/buildozer_build.log
+          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed" | tee -a logs/buildozer_build.log
+          
+          # Проверяем наличие исходных файлов приложения
+          echo "== Checking application files ==" | tee -a logs/buildozer_build.log
+          ls -la app/ | tee -a logs/buildozer_build.log
+          echo "Main Python files:" | tee -a logs/buildozer_build.log
+          ls -la app/*.py | tee -a logs/buildozer_build.log
+          echo "Buildozer spec file:" | tee -a logs/buildozer_build.log
+          ls -la buildozer.spec | tee -a logs/buildozer_build.log
+          
+          # Принудительная очистка buildozer перед сборкой
+          echo "== Forcing buildozer clean ==" | tee -a logs/buildozer_build.log
+          buildozer android clean 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer clean failed (expected)" | tee -a logs/buildozer_build.log
+          
+          # Удаляем кеш buildozer для принудительного пересоздания
+          echo "== Removing buildozer cache ==" | tee -a logs/buildozer_build.log
+          rm -rf .buildozer || true
+          
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
           echo "Build type: $BUILD_TYPE" | tee -a logs/buildozer_build.log
