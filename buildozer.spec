@@ -17,9 +17,6 @@ fullscreen = 0
 # зависимости (python-for-android)
 requirements = python3,kivy==2.3.0,pillow,reportlab,androidstorage4kivy,plyer,openssl
 
-# исключаем проблемные рецепты
-android.recipe_blacklist = libffi
-
 # используем sdl2 bootstrap для Kivy
 p4a.bootstrap = sdl2
 
@@ -35,20 +32,11 @@ android.archs = arm64-v8a
 # android.logcat_filters = *:S python:D
 
 [buildozer]
-# Пути берём из переменных окружения CI
-android.sdk_dir = %(ANDROID_HOME)s
-android.ndk_dir = %(ANDROID_NDK_HOME)s
 log_level = 2
 bin_dir = bin
 
 [android]
 # ускорение и стабильность сборки
 accept_sdk_license = True
-p4a.branch = master
-# Стабильные версии Android SDK
-android.platform = android-32
-android.build_tools = 34.0.0
-android.ndk = 25.2.9519653
-# Пути к SDK и NDK
-android.sdk_dir = /home/runner/work/CNCChecklist/CNCChecklist/android-sdk
-android.ndk_dir = /home/runner/work/CNCChecklist/CNCChecklist/android-ndk
+# Используем актуальную ветку p4a с фиксом libffi
+p4a.branch = develop

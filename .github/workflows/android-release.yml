@@ -19,40 +19,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
       PIP_DISABLE_PIP_VERSION_CHECK: 1
-      P4A_DEBUG: "1"
-      # Стабильные версии Android SDK (соответствуют buildozer.spec)
-      ANDROID_PLATFORM: "android-32"
-      ANDROID_BUILD_TOOLS: "34.0.0"
-      ANDROID_NDK_VERSION: "25.2.9519653"
       ANDROIDAPI: "32"
       ANDROIDMINAPI: "26"
-      # Обход проблем с libffi
-      LIBFFI_CFLAGS: "-I/usr/include/arm-linux-gnueabihf"
-      LIBFFI_LIBS: "-lffi"
-      # Полное исключение libffi
-      P4A_LIBFFI_SKIP: "1"
-      P4A_USE_SYSTEM_LIBFFI: "1"
-      P4A_RECIPE_BLACKLIST: "libffi"
-      # Отключаем проблемные макросы autoconf
-      AUTOCONF_VERSION: "2.71"
-      AUTOMAKE_VERSION: "1.16"
-      LT_SYS_SYMBOL_USCORE: "no"
-      # Дополнительные переменные для исправления libffi
-      ACLOCAL_PATH: "/usr/share/aclocal"
-      M4PATH: "/usr/share/aclocal"
-      # Переменные для исправления autotools
-      AUTOTOOLS_ACLOCAL: "/usr/share/aclocal"
-      AUTOTOOLS_M4: "/usr/share/aclocal"
-      # Максимальный уровень логирования для buildozer
       BUILDIZER_LOG_LEVEL: "2"
-      # Используем sdl2 bootstrap для Kivy
-      P4A_BOOTSTRAP: "sdl2"
-      # Используем стабильную ветку python-for-android
-      P4A_BRANCH: "master"
 
     steps:
       - name: Checkout
@@ -64,9 +34,6 @@ jobs:
           echo "=== CNC Checklist Build Workflow ===" | tee -a logs/summary.txt
           echo "Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
           echo "Build type: ${{ github.event.inputs.build_type || 'debug' }}" | tee -a logs/summary.txt
-          echo "Target Android API: $ANDROID_PLATFORM" | tee -a logs/summary.txt
-          echo "Build tools: $ANDROID_BUILD_TOOLS" | tee -a logs/summary.txt
-          echo "NDK version: $ANDROID_NDK_VERSION" | tee -a logs/summary.txt
 
       - name: Set up Java 11 (Temurin)
         uses: actions/setup-java@v4
@@ -86,28 +53,17 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install build tools for libffi
+      - name: Install autotools (p4a/libffi build deps)
         run: |
           set -euxo pipefail
           sudo apt-get update
-          # Устанавливаем более новые версии autotools
-          sudo apt-get install -y autoconf automake libtool libtool-bin pkg-config autoconf-archive
-          # Устанавливаем дополнительные пакеты для libffi
-          sudo apt-get install -y libffi-dev libffi8
-          # Проверяем версии
+          # Фиксируем состав автотулов
+          sudo apt-get install -y autoconf automake libtool libtool-bin m4 pkg-config gperf autopoint
+          # Проверяем версии ключевых инструментов
           autoconf --version
           automake --version
-          libtool --version || echo "libtool not found, trying libtool-bin"
-          libtool-bin --version || echo "libtool-bin not found"
-          # Проверяем доступность libtool
-          which libtool || which libtool-bin || echo "No libtool found in PATH"
-          # Создаем символическую ссылку если нужно
-          if ! which libtool && which libtool-bin; then
-            sudo ln -sf $(which libtool-bin) /usr/bin/libtool
-            echo "Created symlink: libtool -> libtool-bin"
-          fi
-          # Проверяем libffi
-          pkg-config --modversion libffi || echo "libffi not found via pkg-config"
+          libtool --version || true
+          libtool-bin --version || true
 
       - name: Install system deps (Ubuntu 24.04)
         run: |
@@ -149,338 +105,13 @@ jobs:
             df -h
           } | tee logs/system_info.txt
 
-      - name: Prepare SDK/NDK folders
+      - name: Android SDK/NDK setup (skipped)
         run: |
-          set -euxo pipefail
-          mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME" logs
+          echo "Skipping manual Android SDK/NDK setup; buildozer will manage them in ~/.buildozer"
 
-      - name: Install Android SDK (alternative method)
+      - name: Install NDK (skipped; buildozer-managed)
         run: |
-          set -euxo pipefail
-          mkdir -p logs
-          echo "== Starting Android SDK installation ==" | tee -a logs/system_info.txt
-          cd "$ANDROID_HOME"
-          
-          echo "== Installing Android SDK using alternative method =="
-          
-          # Создаем структуру папок
-          mkdir -p build-tools platforms ndk platform-tools cmdline-tools/latest/bin
-          
-          # Скачиваем commandline-tools
-          echo "Downloading commandline-tools..."
-          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdtools.zip
-          unzip -q cmdtools.zip -d cmdline-tools-tmp
-          mv cmdline-tools-tmp/cmdline-tools/* cmdline-tools/latest/
-          rm -rf cmdline-tools-tmp cmdtools.zip
-          
-          # Скачиваем build-tools напрямую
-          echo "Downloading build-tools 34.0.0 directly..."
-          cd build-tools
-          
-          # Пробуем несколько URL для build-tools
-          BUILD_TOOLS_URLS=(
-            "https://dl.google.com/android/repository/build-tools_r34.0.0-linux.zip"
-            "https://dl.google.com/android/repository/build-tools_r33.0.2-linux.zip"
-            "https://dl.google.com/android/repository/build-tools_r30.0.3-linux.zip"
-          )
-          
-          BUILD_TOOLS_DOWNLOADED=false
-          for url in "${BUILD_TOOLS_URLS[@]}"; do
-            echo "Trying to download from: $url"
-            if curl -sSL "$url" -o build-tools.zip; then
-              # Проверяем, что файл скачался и не пустой
-              if [ -f "build-tools.zip" ] && [ -s "build-tools.zip" ]; then
-                echo "File downloaded, size: $(stat -c%s build-tools.zip) bytes"
-                
-                # Проверяем, что это валидный zip файл
-                if unzip -t build-tools.zip >/dev/null 2>&1; then
-                  echo "Valid zip file, extracting..."
-                  unzip -q build-tools.zip
-                  
-                  # Определяем версию и переименовываем папку
-                  if [ -d "android-11" ]; then
-                    mv android-11 34.0.0
-                    echo "✅ build-tools 34.0.0 downloaded and extracted"
-                  elif [ -d "android-10" ]; then
-                    mv android-10 33.0.2
-                    echo "✅ build-tools 33.0.2 downloaded and extracted"
-                  elif [ -d "android-9" ]; then
-                    mv android-9 30.0.3
-                    echo "✅ build-tools 30.0.3 downloaded and extracted"
-                  else
-                    # Ищем любую папку android-*
-                    ANDROID_DIR=$(find . -maxdepth 1 -type d -name "android-*" | head -1)
-                    if [ -n "$ANDROID_DIR" ]; then
-                      # Определяем правильную версию по URL
-                      if [[ "$url" == *"34.0.0"* ]]; then
-                        mv "$ANDROID_DIR" "34.0.0"
-                        echo "✅ build-tools 34.0.0 downloaded and extracted"
-                      elif [[ "$url" == *"33.0.2"* ]]; then
-                        mv "$ANDROID_DIR" "33.0.2"
-                        echo "✅ build-tools 33.0.2 downloaded and extracted"
-                      elif [[ "$url" == *"30.0.3"* ]]; then
-                        mv "$ANDROID_DIR" "30.0.3"
-                        echo "✅ build-tools 30.0.3 downloaded and extracted"
-                      else
-                        VERSION=$(basename "$ANDROID_DIR" | sed 's/android-//')
-                        mv "$ANDROID_DIR" "$VERSION"
-                        echo "✅ build-tools $VERSION downloaded and extracted"
-                      fi
-                    fi
-                  fi
-                  
-                  rm -f build-tools.zip
-                  BUILD_TOOLS_DOWNLOADED=true
-                  break
-                else
-                  echo "Invalid zip file, trying next URL..."
-                  rm -f build-tools.zip
-                fi
-              else
-                echo "File download failed or empty, trying next URL..."
-                rm -f build-tools.zip
-              fi
-            else
-              echo "Failed to download from $url, trying next URL..."
-            fi
-          done
-          
-          if [ "$BUILD_TOOLS_DOWNLOADED" = false ]; then
-            echo "❌ Failed to download any build-tools version"
-            exit 1
-          fi
-          
-          cd ..
-          
-          # Скачиваем platform-tools
-          echo "Downloading platform-tools..."
-          cd platform-tools
-          
-          PLATFORM_TOOLS_URLS=(
-            "https://dl.google.com/android/repository/platform-tools_r34.0.5-linux.zip"
-            "https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip"
-            "https://dl.google.com/android/repository/platform-tools_r30.0.5-linux.zip"
-          )
-          
-          PLATFORM_TOOLS_DOWNLOADED=false
-          for url in "${PLATFORM_TOOLS_URLS[@]}"; do
-            echo "Trying to download platform-tools from: $url"
-            if curl -sSL "$url" -o platform-tools.zip; then
-              if [ -f "platform-tools.zip" ] && [ -s "platform-tools.zip" ]; then
-                echo "Platform-tools downloaded, size: $(stat -c%s platform-tools.zip) bytes"
-                if unzip -t platform-tools.zip >/dev/null 2>&1; then
-                  unzip -q platform-tools.zip
-                  rm -f platform-tools.zip
-                  echo "✅ platform-tools downloaded and extracted"
-                  PLATFORM_TOOLS_DOWNLOADED=true
-                  break
-                else
-                  echo "Invalid platform-tools zip file, trying next URL..."
-                  rm -f platform-tools.zip
-                fi
-              else
-                echo "Platform-tools download failed or empty, trying next URL..."
-                rm -f platform-tools.zip
-              fi
-            else
-              echo "Failed to download platform-tools from $url, trying next URL..."
-            fi
-          done
-          
-          if [ "$PLATFORM_TOOLS_DOWNLOADED" = false ]; then
-            echo "❌ Failed to download platform-tools"
-            exit 1
-          fi
-          
-          cd ..
-          
-          # Скачиваем platform android-33
-          echo "Downloading platform android-33..."
-          cd platforms
-          
-          PLATFORM_URLS=(
-            "https://dl.google.com/android/repository/platform-33_r03.zip"
-            "https://dl.google.com/android/repository/platform-32_r01.zip"
-            "https://dl.google.com/android/repository/platform-31_r01.zip"
-          )
-          
-          PLATFORM_DOWNLOADED=false
-          for url in "${PLATFORM_URLS[@]}"; do
-            echo "Trying to download platform from: $url"
-            if curl -sSL "$url" -o platform.zip; then
-              if [ -f "platform.zip" ] && [ -s "platform.zip" ]; then
-                echo "Platform downloaded, size: $(stat -c%s platform.zip) bytes"
-                if unzip -t platform.zip >/dev/null 2>&1; then
-                  unzip -q platform.zip
-                  rm -f platform.zip
-                  echo "✅ platform downloaded and extracted"
-                  PLATFORM_DOWNLOADED=true
-                  break
-                else
-                  echo "Invalid platform zip file, trying next URL..."
-                  rm -f platform.zip
-                fi
-              else
-                echo "Platform download failed or empty, trying next URL..."
-                rm -f platform.zip
-              fi
-            else
-              echo "Failed to download platform from $url, trying next URL..."
-            fi
-          done
-          
-          if [ "$PLATFORM_DOWNLOADED" = false ]; then
-            echo "❌ Failed to download platform"
-            exit 1
-          fi
-          
-          cd ..
-          
-                    # Проверяем установку
-          echo "== Verifying installation =="
-          ls -la build-tools/ || true
-          ls -la platforms/ || true
-          ls -la platform-tools/ || true
-          
-          # Создаем папку logs если её нет
-          mkdir -p logs
-          
-          # Проверяем sdkmanager
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version | tee -a logs/system_info.txt || true
-          java -version 2>&1 | tee -a logs/system_info.txt || true
-
-          # Принимаем лицензии Android SDK
-          echo "== Accepting Android SDK licenses ==" | tee -a logs/system_info.txt
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses | tee -a logs/system_info.txt || true
-          
-          # Устанавливаем компоненты через sdkmanager
-          echo "== Installing Android SDK components ==" | tee -a logs/system_info.txt
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
-            "platform-tools" "platforms;android-32" "build-tools;34.0.0" "ndk;25.2.9519653" | tee -a logs/system_info.txt || true
-
-      - name: Install NDK (if needed)
-        run: |
-          set -euo pipefail
-          mkdir -p logs
-          
-          echo "== Installing NDK =="
-          cd "$ANDROID_HOME/ndk"
-          
-          # Пробуем несколько URL для NDK
-          NDK_URLS=(
-            "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_VERSION-linux.zip"
-            "https://dl.google.com/android/repository/android-ndk-r25c-linux.zip"
-            "https://dl.google.com/android/repository/android-ndk-r25b-linux.zip"
-            "https://dl.google.com/android/repository/android-ndk-r25a-linux.zip"
-          )
-          
-          NDK_DOWNLOADED=false
-          for url in "${NDK_URLS[@]}"; do
-            echo "Trying to download NDK from: $url"
-            if curl -sSL "$url" -o ndk.zip; then
-              # Проверяем, что файл скачался и не пустой
-              if [ -f "ndk.zip" ] && [ -s "ndk.zip" ]; then
-                echo "NDK downloaded, size: $(stat -c%s ndk.zip) bytes"
-                
-                # Проверяем, что это валидный zip файл
-                if unzip -t ndk.zip >/dev/null 2>&1; then
-                  echo "Valid NDK zip file, extracting..."
-                  unzip -q ndk.zip
-                  
-                  # Определяем версию и переименовываем папку
-                  if [ -d "android-ndk-$ANDROID_NDK_VERSION" ]; then
-                    mv "android-ndk-$ANDROID_NDK_VERSION" "$ANDROID_NDK_VERSION"
-                    echo "✅ NDK $ANDROID_NDK_VERSION downloaded and extracted"
-                  elif [ -d "android-ndk-r25c" ]; then
-                    mv "android-ndk-r25c" "25.2.9519653"
-                    echo "✅ NDK r25c downloaded and extracted as 25.2.9519653"
-                  elif [ -d "android-ndk-r25b" ]; then
-                    mv "android-ndk-r25b" "25.2.9519653"
-                    echo "✅ NDK r25b downloaded and extracted as 25.2.9519653"
-                  elif [ -d "android-ndk-r25a" ]; then
-                    mv "android-ndk-r25a" "25.2.9519653"
-                    echo "✅ NDK r25a downloaded and extracted as 25.2.9519653"
-                  else
-                    # Ищем любую папку android-ndk-*
-                    NDK_DIR=$(find . -maxdepth 1 -type d -name "android-ndk-*" | head -1)
-                    if [ -n "$NDK_DIR" ]; then
-                      mv "$NDK_DIR" "$ANDROID_NDK_VERSION"
-                      echo "✅ NDK downloaded and extracted as $ANDROID_NDK_VERSION"
-                    fi
-                  fi
-                  
-                  rm -f ndk.zip
-                  NDK_DOWNLOADED=true
-                  break
-                else
-                  echo "Invalid NDK zip file, trying next URL..."
-                  rm -f ndk.zip
-                fi
-              else
-                echo "NDK download failed or empty, trying next URL..."
-                rm -f ndk.zip
-              fi
-            else
-              echo "Failed to download NDK from $url, trying next URL..."
-            fi
-          done
-          
-          if [ "$NDK_DOWNLOADED" = false ]; then
-            echo "❌ Failed to download any NDK version"
-            exit 1
-          fi
-          
-          # Создаем символическую ссылку на NDK
-          ln -s "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME" || true
-          
-          echo "== Final verification =="
-          ls -la "$ANDROID_HOME/build-tools/" || true
-          ls -la "$ANDROID_HOME/platforms/" || true
-          ls -la "$ANDROID_HOME/ndk/" || true
-          ls -la "$ANDROID_HOME/platform-tools/" || true
-          
-          echo "== Check aidl availability =="
-          AIDL_PATHS=$(find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null || echo "")
-          if [ -n "$AIDL_PATHS" ]; then
-            echo "✅ aidl found at:"
-            echo "$AIDL_PATHS"
-            # Проверяем, что aidl исполняемый
-            for aidl_path in $AIDL_PATHS; do
-              if [ -x "$aidl_path" ]; then
-                echo "✅ $aidl_path is executable"
-                "$aidl_path" --help | head -5 || true
-              else
-                echo "⚠️  $aidl_path is not executable"
-              fi
-            done
-          else
-            echo "❌ aidl not found in Android SDK"
-            echo "Available files in build-tools:"
-            find "$ANDROID_HOME/build-tools" -name "*aidl*" 2>/dev/null || echo "No aidl-related files found"
-          fi
-          
-          echo "== Disk usage =="
-          du -sh "$ANDROID_HOME" || true
-          df -h || true
-
-      - name: Fix autotools compatibility for libffi
-        run: |
-          set -euxo pipefail
-          echo "== Fixing autotools compatibility for libffi =="
-          
-          # Создаем символическую ссылку для LT_SYS_SYMBOL_USCORE
-          echo "Creating compatibility symlink for LT_SYS_SYMBOL_USCORE"
-          sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
-          
-          # Устанавливаем переменные для совместимости
-          export LT_SYS_SYMBOL_USCORE=no
-          echo "LT_SYS_SYMBOL_USCORE=no" >> $GITHUB_ENV
-          
-          # Проверяем версии autotools
-          echo "Autotools versions:"
-          autoconf --version | head -1 || true
-          automake --version | head -1 || true
-          libtool --version | head -1 || true
+          echo "Skipping manual NDK installation; buildozer will handle NDK download"
 
       - name: Install buildozer & Python deps
         run: |
@@ -576,7 +207,7 @@ jobs:
           echo "=== buildozer.spec validation ===" | tee -a logs/summary.txt
           head -n 10 buildozer.spec | tee -a logs/summary.txt
           
-          # Проверяем соответствие версий в buildozer.spec
+          # Минимальная проверка ключевых параметров
           python -c "
           import configparser, sys
           cfg = configparser.ConfigParser()
@@ -589,51 +220,24 @@ jobs:
           # Проверяем версии Android SDK
           android_api = cfg.get('app', 'android.api', fallback='')
           android_minapi = cfg.get('app', 'android.minapi', fallback='')
-          android_platform = cfg.get('android', 'android.platform', fallback='')
-          build_tools = cfg.get('android', 'android.build_tools', fallback='')
-          ndk_version = cfg.get('android', 'android.ndk', fallback='')
           
           print(f'Android API: {android_api}')
           print(f'Android Min API: {android_minapi}')
-          print(f'Android Platform: {android_platform}')
-          print(f'Build Tools: {build_tools}')
-          print(f'NDK Version: {ndk_version}')
           
-          # Проверяем соответствие стабильным версиям
+          # Проверяем соответствие только api/minapi
           assert android_api == '32', f'Expected android.api=32, got {android_api}'
           assert android_minapi == '26', f'Expected android.minapi=26, got {android_minapi}'
-          assert android_platform == 'android-32', f'Expected android.platform=android-32, got {android_platform}'
-          assert build_tools == '34.0.0', f'Expected android.build_tools=34.0.0, got {build_tools}'
-          assert ndk_version == '25.2.9519653', f'Expected android.ndk=25.2.9519653, got {ndk_version}'
           
           print('buildozer.spec validation: PASSED')
           " | tee -a logs/summary.txt
 
       - name: Build APK (verbose, logged)
         env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
-          ANDROIDSDK: ${{ env.ANDROID_HOME }}
-          ANDROIDNDK: ${{ env.ANDROID_NDK_HOME }}
-          ANDROID_PLATFORM: ${{ env.ANDROID_PLATFORM }}
-          ANDROID_BUILD_TOOLS: ${{ env.ANDROID_BUILD_TOOLS }}
-          ANDROID_NDK_VERSION: ${{ env.ANDROID_NDK_VERSION }}
           ANDROIDAPI: ${{ env.ANDROIDAPI }}
           ANDROIDMINAPI: ${{ env.ANDROIDMINAPI }}
-          LIBFFI_CFLAGS: ${{ env.LIBFFI_CFLAGS }}
-          LIBFFI_LIBS: ${{ env.LIBFFI_LIBS }}
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2g -Dkotlin.daemon.jvm.options=-Xmx512m -Dorg.gradle.caching=false -Dorg.gradle.daemon=false"
           GRADLE_USER_HOME: "/tmp/gradle-cache"
           GRADLE_DAEMON_OPTS: "-Dorg.gradle.daemon=false"
-          AUTOCONF_VERSION: ${{ env.AUTOCONF_VERSION }}
-          AUTOMAKE_VERSION: ${{ env.AUTOMAKE_VERSION }}
-          LT_SYS_SYMBOL_USCORE: ${{ env.LT_SYS_SYMBOL_USCORE }}
-          P4A_USE_SYSTEM_LIBFFI: ${{ env.P4A_USE_SYSTEM_LIBFFI }}
-          P4A_LIBFFI_SKIP: ${{ env.P4A_LIBFFI_SKIP }}
-          P4A_RECIPE_BLACKLIST: ${{ env.P4A_RECIPE_BLACKLIST }}
-          P4A_BOOTSTRAP: ${{ env.P4A_BOOTSTRAP }}
-          P4A_BRANCH: ${{ env.P4A_BRANCH }}
           BUILDIZER_LOG_LEVEL: ${{ env.BUILDIZER_LOG_LEVEL }}
         run: |
           set -euo pipefail
@@ -645,8 +249,7 @@ jobs:
           
           # Проверяем окружение перед сборкой
           echo "== Pre-build environment check ==" | tee -a logs/buildozer_build.log
-          echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
+          # Buildozer will configure SDK/NDK paths internally
           echo "Current directory: $(pwd)" | tee -a logs/buildozer_build.log
           echo "Python version: $(python --version)" | tee -a logs/buildozer_build.log
           echo "Buildozer version: $(buildozer --version)" | tee -a logs/buildozer_build.log
@@ -661,66 +264,9 @@ jobs:
           rm -rf bin .buildozer
           mkdir -p bin
           
-          # Обновляем buildozer.spec
-          echo "== Updating buildozer.spec ==" | tee -a logs/buildozer_build.log
-          echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
-          echo "ANDROID_PLATFORM: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
-          echo "ANDROID_BUILD_TOOLS: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
-          echo "ANDROID_NDK_VERSION: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
+          # Не трогаем buildozer.spec путями SDK/NDK — ими управляет buildozer
           
-          # Обновляем buildozer.spec
-          if [ -f "buildozer.spec" ]; then
-            # Создаем резервную копию
-            cp buildozer.spec buildozer.spec.backup
-            
-            # Обновляем пути и версии в buildozer.spec
-            sed -i "s|android\.sdk_dir = .*|android.sdk_dir = $ANDROID_HOME|" buildozer.spec
-            sed -i "s|android\.ndk_dir = .*|android.ndk_dir = $ANDROID_NDK_HOME|" buildozer.spec
-            sed -i "s/android\.platform = .*/android.platform = $ANDROID_PLATFORM/" buildozer.spec
-            sed -i "s/android\.build_tools = .*/android.build_tools = $ANDROID_BUILD_TOOLS/" buildozer.spec
-            sed -i "s/android\.ndk = .*/android.ndk = $ANDROID_NDK_VERSION/" buildozer.spec
-            sed -i "s/android\.api = .*/android.api = $ANDROIDAPI/" buildozer.spec
-            sed -i "s/android\.minapi = .*/android.minapi = $ANDROIDMINAPI/" buildozer.spec
-            
-            echo "Updated buildozer.spec" | tee -a logs/buildozer_build.log
-            echo "Updated android.sdk_dir to: $ANDROID_HOME" | tee -a logs/buildozer_build.log
-            echo "Updated android.ndk_dir to: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
-            echo "Updated android.platform to: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
-            echo "Updated android.build_tools to: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
-            echo "Updated android.ndk to: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
-            echo "Updated android.api to: $ANDROIDAPI" | tee -a logs/buildozer_build.log
-            echo "Updated android.minapi to: $ANDROIDMINAPI" | tee -a logs/buildozer_build.log
-          fi
-          
-          # Создаем символические ссылки для buildozer
-          echo "== Creating symlinks for buildozer ==" | tee -a logs/buildozer_build.log
-          BUILDIZER_SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          mkdir -p "$BUILDIZER_SDK_DIR"
-          
-          # Создаем символические ссылки на компоненты
-          ln -sf "$ANDROID_HOME/build-tools" "$BUILDIZER_SDK_DIR/build-tools" || true
-          ln -sf "$ANDROID_HOME/platforms" "$BUILDIZER_SDK_DIR/platforms" || true
-          ln -sf "$ANDROID_HOME/platform-tools" "$BUILDIZER_SDK_DIR/platform-tools" || true
-          ln -sf "$ANDROID_HOME/ndk" "$BUILDIZER_SDK_DIR/ndk" || true
-          ln -sf "$ANDROID_HOME/cmdline-tools" "$BUILDIZER_SDK_DIR/cmdline-tools" || true
-          
-          # Проверяем, что ссылки созданы правильно
-          echo "== Verifying symlinks ==" | tee -a logs/buildozer_build.log
-          ls -la "$BUILDIZER_SDK_DIR/" | tee -a logs/buildozer_build.log
-          echo "Checking build-tools:" | tee -a logs/buildozer_build.log
-          ls -la "$BUILDIZER_SDK_DIR/build-tools/" | tee -a logs/buildozer_build.log || echo "build-tools not found" | tee -a logs/buildozer_build.log
-          echo "Checking platforms:" | tee -a logs/buildozer_build.log
-          ls -la "$BUILDIZER_SDK_DIR/platforms/" | tee -a logs/buildozer_build.log || echo "platforms not found" | tee -a logs/buildozer_build.log
-          
-          # Создаем структуру tools для совместимости
-          mkdir -p "$BUILDIZER_SDK_DIR/tools/bin"
-          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$BUILDIZER_SDK_DIR/tools/bin/sdkmanager" || true
-          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" "$BUILDIZER_SDK_DIR/tools/bin/avdmanager" || true
-          ln -sf "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" "$BUILDIZER_SDK_DIR/tools/bin/apkanalyzer" || true
-          
-          echo "Created symlinks in $BUILDIZER_SDK_DIR" | tee -a logs/buildozer_build.log
-          ls -la "$BUILDIZER_SDK_DIR" | tee -a logs/buildozer_build.log
+          # Не создаем никаких симлинков для SDK — buildozer сам управляет .buildozer
           
           # Проверяем доступность sdkmanager
           echo "== Checking sdkmanager availability ==" | tee -a logs/buildozer_build.log
@@ -740,20 +286,7 @@ jobs:
             echo "❌ aidl not found in buildozer SDK directory" | tee -a logs/buildozer_build.log
           fi
           
-          # Попытка обхода проблем с libffi
-          echo "== Attempting libffi workaround ==" | tee -a logs/buildozer_build.log
-          export LT_SYS_SYMBOL_USCORE=no
-          export AUTOCONF_VERSION=2.71
-          export AUTOMAKE_VERSION=1.16
-          export P4A_USE_SYSTEM_LIBFFI=1
-          export P4A_LIBFFI_SKIP=1
-          export P4A_RECIPE_BLACKLIST=libffi
-          export P4A_BOOTSTRAP=sdl2
-          export P4A_BRANCH=master
-          
-          # Дополнительные переменные для libffi
-          export LIBFFI_CFLAGS="-I/usr/include/arm-linux-gnueabihf"
-          export LIBFFI_LIBS="-lffi"
+          # Убираем хаки libffi — позволяем p4a собрать libffi сам
           
           # Проверяем buildozer перед сборкой
           echo "== Checking buildozer installation ==" | tee -a logs/buildozer_build.log
@@ -762,8 +295,7 @@ jobs:
           
           # Проверяем, что buildozer может найти SDK компоненты
           echo "== Checking SDK components availability ==" | tee -a logs/buildozer_build.log
-          echo "ANDROID_HOME: $ANDROID_HOME" | tee -a logs/buildozer_build.log
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME" | tee -a logs/buildozer_build.log
+          # Buildozer will configure SDK/NDK paths internally
           echo "Checking if buildozer can find SDK:" | tee -a logs/buildozer_build.log
           buildozer android debug --help 2>&1 | head -20 | tee -a logs/buildozer_build.log || \
             echo "buildozer android debug --help failed" | tee -a logs/buildozer_build.log
@@ -830,22 +362,12 @@ jobs:
             head -20 | tee -a logs/buildozer_build.log || \
             echo "No buildozer files found" | tee -a logs/buildozer_build.log
           
-          # Проверяем buildozer SDK detection после инициализации
+          # Проверяем buildozer detection после инициализации
           echo "== Re-checking buildozer SDK detection after init ==" | tee -a logs/buildozer_build.log
           buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || \
             echo "buildozer android debug --help failed after init" | tee -a logs/buildozer_build.log
           
-          # Исправляем проблемы с libffi и autotools
-          echo "== Fixing libffi and autotools issues ==" | tee -a logs/buildozer_build.log
-          
-          # Создаем символические ссылки для autotools
-          sudo mkdir -p /usr/share/aclocal || true
-          sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
-          
-          # Устанавливаем переменные окружения для autotools
-          export LT_SYS_SYMBOL_USCORE=no
-          export ACLOCAL_PATH="/usr/share/aclocal"
-          export M4PATH="/usr/share/aclocal"
+          # Не трогаем системные autotools — используем стандартную установку
           
           # Попробуем принудительно создать Android проект
           echo "== Forcing Android project creation ==" | tee -a logs/buildozer_build.log
@@ -1020,7 +542,7 @@ jobs:
             echo "**Build Type**: ${{ github.event.inputs.build_type || 'debug' }}"
             echo "**System**: Java $(java -version 2>&1 | head -n1), Python $(python --version 2>&1)"
             echo "**Android SDK**: Platform $ANDROID_PLATFORM, Build Tools $ANDROID_BUILD_TOOLS, NDK $ANDROID_NDK_VERSION"
-            echo "**SDK root**: $ANDROID_HOME"
+            echo "**SDK root**: managed by buildozer (~/.buildozer)"
             echo ""
             echo "**Build Outputs**:"
             if [ -d "bin" ]; then
