@@ -789,6 +789,27 @@ jobs:
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
           echo "Build type: $BUILD_TYPE" | tee -a logs/buildozer_build.log
           echo "Using command: buildozer -v android $BUILD_TYPE" | tee -a logs/buildozer_build.log
+          echo "Current working directory: $(pwd)" | tee -a logs/buildozer_build.log
+          echo "Files in current directory:" | tee -a logs/buildozer_build.log
+          ls -la | tee -a logs/buildozer_build.log
+          
+          # Проверяем переменные окружения
+          echo "== Environment variables ==" | tee -a logs/buildozer_build.log
+          env | grep -E "(ANDROID|P4A|GRADLE|JAVA)" | sort | tee -a logs/buildozer_build.log
+          
+          # Проверяем доступность buildozer
+          echo "== Buildozer availability ==" | tee -a logs/buildozer_build.log
+          which buildozer | tee -a logs/buildozer_build.log
+          buildozer --version | tee -a logs/buildozer_build.log
+          
+          # Проверяем наличие файлов приложения
+          echo "== Application files check ==" | tee -a logs/buildozer_build.log
+          echo "Checking app directory:" | tee -a logs/buildozer_build.log
+          ls -la app/ | tee -a logs/buildozer_build.log
+          echo "Checking main.py:" | tee -a logs/buildozer_build.log
+          ls -la app/main.py | tee -a logs/buildozer_build.log
+          echo "Checking buildozer.spec:" | tee -a logs/buildozer_build.log
+          ls -la buildozer.spec | tee -a logs/buildozer_build.log
           
           # Попробуем инициализацию buildozer сначала
           echo "== Initializing buildozer ==" | tee -a logs/buildozer_build.log
@@ -883,8 +904,14 @@ jobs:
             else
               BUILD_EXIT_CODE=$?
               echo "Buildozer command with verbose also failed with exit code: $BUILD_EXIT_CODE" | tee -a logs/summary.txt
-              echo "Last 50 lines of build log:" | tee -a logs/summary.txt
-              tail -50 logs/buildozer_build.log | tee -a logs/summary.txt
+              echo "== Last 100 lines of build log ==" | tee -a logs/summary.txt
+              tail -100 logs/buildozer_build.log | tee -a logs/summary.txt
+              echo "== Full buildozer log for debugging ==" | tee -a logs/summary.txt
+              cat logs/buildozer_build.log | tee -a logs/summary.txt
+              echo "== Current directory contents ==" | tee -a logs/summary.txt
+              ls -la | tee -a logs/summary.txt
+              echo "== .buildozer directory contents ==" | tee -a logs/summary.txt
+              find .buildozer -type f 2>/dev/null | head -20 | tee -a logs/summary.txt || echo "No .buildozer files found" | tee -a logs/summary.txt
               exit $BUILD_EXIT_CODE
             fi
           fi
