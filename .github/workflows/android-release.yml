@@ -119,6 +119,10 @@ jobs:
           # Проверяем доступные пакеты
           echo "== Available packages =="
           "$SDKM" --sdk_root="$SDKROOT" --list | grep -E "(build-tools|platforms|ndk)" | head -20 || true
+          
+          # Проверяем доступные версии build-tools
+          echo "== Available build-tools versions =="
+          "$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" | head -10 || true
 
           install_pkg() {
             pkg="$1"
@@ -147,7 +151,44 @@ jobs:
           # Устанавливаем только необходимые пакеты
           install_pkg "platform-tools"
           install_pkg "platforms;$ANDROID_PLATFORM"
-          install_pkg "build-tools;$ANDROID_BUILD_TOOLS"
+          
+          # Специальная обработка build-tools
+          echo "== Installing build-tools with fallback =="
+          BUILD_TOOLS_INSTALLED=false
+          
+          # Пробуем установить нужную версию
+          if install_pkg "build-tools;$ANDROID_BUILD_TOOLS"; then
+            if [ -d "$SDKROOT/build-tools/$ANDROID_BUILD_TOOLS" ]; then
+              BUILD_TOOLS_INSTALLED=true
+              echo "✅ Target build-tools $ANDROID_BUILD_TOOLS installed successfully"
+            fi
+          fi
+          
+          # Если не получилось, пробуем установить любую доступную версию
+          if [ "$BUILD_TOOLS_INSTALLED" = false ]; then
+            echo "== Trying to install any available build-tools =="
+            AVAILABLE_VERSIONS=$("$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" | head -5 | cut -d'|' -f1 | tr -d ' ' || true)
+            
+            for version in $AVAILABLE_VERSIONS; do
+              if [ -n "$version" ] && [ "$version" != "build-tools" ]; then
+                echo "Trying to install $version"
+                if install_pkg "$version"; then
+                  if [ -d "$SDKROOT/build-tools" ] && [ "$(ls -A "$SDKROOT/build-tools" 2>/dev/null)" ]; then
+                    BUILD_TOOLS_INSTALLED=true
+                    echo "✅ Successfully installed $version"
+                    break
+                  fi
+                fi
+              fi
+            done
+          fi
+          
+          if [ "$BUILD_TOOLS_INSTALLED" = false ]; then
+            echo "❌ Failed to install any build-tools"
+            echo "Available build-tools from sdkmanager:"
+            "$SDKM" --sdk_root="$SDKROOT" --list | grep "build-tools" || true
+          fi
+          
           install_pkg "ndk;$ANDROID_NDK_VERSION"
 
           # Создаем символическую ссылку на NDK
@@ -225,6 +266,9 @@ jobs:
           pip list | grep -E "(buildozer|kivy|pillow|reportlab)" | tee -a logs/system_info.txt
 
       - name: Verify Android SDK installation
+        env:
+          SDKM: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin/sdkmanager
+          SDKROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -euo pipefail
           echo "=== Android SDK Verification ===" | tee -a logs/summary.txt
@@ -245,7 +289,22 @@ jobs:
               export ANDROID_BUILD_TOOLS="$AVAILABLE_BUILD_TOOLS"
             else
               echo "❌ No build-tools available at all" | tee -a logs/summary.txt
-              exit 1
+              echo "Trying to install build-tools manually..." | tee -a logs/summary.txt
+              
+              # Попробуем установить build-tools вручную
+              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;34.0.0" || true
+              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;33.0.2" || true
+              "$SDKM" --sdk_root="$SDKROOT" --install "build-tools;33.0.1" || true
+              
+              # Проверяем еще раз
+              AVAILABLE_BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | head -1 || echo "")
+              if [ -n "$AVAILABLE_BUILD_TOOLS" ]; then
+                echo "✅ Successfully installed build-tools: $AVAILABLE_BUILD_TOOLS" | tee -a logs/summary.txt
+                export ANDROID_BUILD_TOOLS="$AVAILABLE_BUILD_TOOLS"
+              else
+                echo "❌ Still no build-tools available after manual installation" | tee -a logs/summary.txt
+                exit 1
+              fi
             fi
           fi
           
