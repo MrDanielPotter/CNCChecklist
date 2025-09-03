@@ -405,7 +405,17 @@ jobs:
             echo "❌ platform $ANDROID_PLATFORM not found" | tee -a logs/summary.txt
             echo "Available platforms:" | tee -a logs/summary.txt
             ls -la "$ANDROID_HOME/platforms/" 2>/dev/null | tee -a logs/summary.txt || echo "No platforms directory" | tee -a logs/summary.txt
-            exit 1
+            
+            # Попробуем найти любую доступную версию platform
+            AVAILABLE_PLATFORM=$(ls "$ANDROID_HOME/platforms/" 2>/dev/null | head -1 || echo "")
+            if [ -n "$AVAILABLE_PLATFORM" ]; then
+              echo "⚠️  Using available platform: $AVAILABLE_PLATFORM" | tee -a logs/summary.txt
+              export ANDROID_PLATFORM="$AVAILABLE_PLATFORM"
+              echo "Updated ANDROID_PLATFORM to: $ANDROID_PLATFORM" | tee -a logs/summary.txt
+            else
+              echo "❌ No platforms available at all" | tee -a logs/summary.txt
+              exit 1
+            fi
           fi
           
           # Проверяем наличие NDK
@@ -468,6 +478,9 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_PLATFORM: ${{ env.ANDROID_PLATFORM }}
+          ANDROID_BUILD_TOOLS: ${{ env.ANDROID_BUILD_TOOLS }}
+          ANDROID_NDK_VERSION: ${{ env.ANDROID_NDK_VERSION }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -493,6 +506,28 @@ jobs:
           # Очищаем предыдущие сборки и создаем папку bin
           rm -rf bin .buildozer
           mkdir -p bin
+          
+          # Обновляем buildozer.spec с актуальными версиями
+          echo "== Updating buildozer.spec with actual versions ==" | tee -a logs/buildozer_build.log
+          echo "ANDROID_PLATFORM: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
+          echo "ANDROID_BUILD_TOOLS: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
+          echo "ANDROID_NDK_VERSION: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
+          
+          # Обновляем buildozer.spec с актуальными версиями
+          if [ -f "buildozer.spec" ]; then
+            # Создаем резервную копию
+            cp buildozer.spec buildozer.spec.backup
+            
+            # Обновляем версии в buildozer.spec
+            sed -i "s/android\.platform = .*/android.platform = $ANDROID_PLATFORM/" buildozer.spec
+            sed -i "s/android\.build_tools = .*/android.build_tools = $ANDROID_BUILD_TOOLS/" buildozer.spec
+            sed -i "s/android\.ndk = .*/android.ndk = $ANDROID_NDK_VERSION/" buildozer.spec
+            
+            echo "Updated buildozer.spec with actual versions" | tee -a logs/buildozer_build.log
+            echo "Updated android.platform to: $ANDROID_PLATFORM" | tee -a logs/buildozer_build.log
+            echo "Updated android.build_tools to: $ANDROID_BUILD_TOOLS" | tee -a logs/buildozer_build.log
+            echo "Updated android.ndk to: $ANDROID_NDK_VERSION" | tee -a logs/buildozer_build.log
+          fi
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
