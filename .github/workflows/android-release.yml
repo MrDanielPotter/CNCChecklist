@@ -1,42 +1,186 @@
-[app]
-title = CNC Checklist
-package.name = cncchecklist
-package.domain = com.cnc.checklist
+name: Build Android APK (with extended logs)
 
-# исходники
-source.dir = .
-source.include_exts = py,kv,jpg,png,ttf
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
 
-# версия приложения
-version = 1.3
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
 
-# ориентация
-orientation = landscape
-fullscreen = 0
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      P4A_DEBUG: "1"
 
-# зависимости (python-for-android)
-requirements = python3,kivy==2.3.0,pillow,reportlab,androidstorage4kivy,plyer,openssl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-# разрешения Android 13+
-android.permissions = INTERNET, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED
+      - name: Prepare logs dir
+        run: |
+          mkdir -p logs
+          echo "Workflow started at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
 
-# целевая/минимальная платформа
-android.api = 33
-android.minapi = 33
-android.arch = arm64-v8a
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-# опционально: логи Kivy
-# android.logcat_filters = *:S python:D
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-[buildozer]
-# Пути берём из переменных окружения CI
-android.sdk_dir = %(ANDROID_HOME)s
-android.ndk_dir = %(ANDROID_NDK_HOME)s
-android.build_tools = 34.0.0
-log_level = 2
-bin_dir = bin
+      - name: Install system deps (Ubuntu 24.04)
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip \
+            libstdc++6 libffi-dev libssl-dev zlib1g-dev \
+            libncurses6 libtinfo6
 
-[android]
-# ускорение и стабильность сборки
-accept_sdk_license = True
-p4a.branch = master
+      - name: System info (env, versions, disk)
+        run: |
+          mkdir -p logs
+          {
+            echo "=== ENV ==="; printenv | sort
+            echo; echo "=== Versions ==="
+            java -version 2>&1 || true
+            python --version 2>&1 || true
+            pip --version 2>&1 || true
+            echo; echo "=== Disk usage ==="
+            df -h
+          } | tee logs/system_info.txt
+
+      - name: Prepare SDK/NDK folders
+        run: |
+          set -euxo pipefail
+          mkdir -p "$ANDROID_HOME" "$ANDROID_NDK_HOME" logs
+
+      - name: Install Android commandline-tools (latest)
+        run: |
+          set -euxo pipefail
+          mkdir -p logs
+          cd "$ANDROID_HOME"
+          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdtools.zip
+          mkdir -p cmdline-tools
+          unzip -q cmdtools.zip -d cmdline-tools-tmp
+          mv cmdline-tools-tmp/cmdline-tools cmdline-tools/latest
+          rm -rf cmdline-tools-tmp cmdtools.zip
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version | tee -a logs/system_info.txt || true
+          java -version 2>&1 | tee -a logs/system_info.txt || true
+
+      - name: Accept licenses & install SDK/NDK (robust, logged)
+        env:
+          SDKM: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin/sdkmanager
+          SDKROOT: ${{ env.ANDROID_HOME }}
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          exec &> >(tee -a logs/sdkmanager_install.log)
+
+          echo "== Accept licenses =="
+          yes | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
+
+          install_pkg() {
+            local pkg="$1"
+            echo "== Installing: $pkg =="
+            for i in 1 2 3; do
+              "$SDKM" --sdk_root="$SDKROOT" "$pkg" && break || {
+                echo "WARN: attempt $i failed for $pkg; retrying in 5s..."
+                sleep 5
+              }
+            done
+          }
+
+          install_pkg "platform-tools"
+          install_pkg "platforms;android-33"
+          install_pkg "build-tools;34.0.0"
+          install_pkg "ndk;25.2.9519653"
+
+          ln -s "$ANDROID_HOME/ndk/25.2.9519653" "$ANDROID_NDK_HOME" || true
+          if [ -L "$ANDROID_HOME/build-tools/36.1.0-rc1" ]; then rm -f "$ANDROID_HOME/build-tools/36.1.0-rc1"; fi
+
+          echo "== Verify installed list (head) =="
+          "$SDKM" --sdk_root="$SDKROOT" --list | sed -n '1,200p' || true
+          echo "== Disk usage =="
+          du -sh "$ANDROID_HOME" || true
+          df -h || true
+
+      - name: Install buildozer & Python deps
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip wheel setuptools cython
+          python -m pip install buildozer==1.5.0
+
+      - name: Download DejaVuSans.ttf (for Cyrillic PDF)
+        run: |
+          set -euxo pipefail
+          mkdir -p app/assets/fonts logs
+          curl -sSL "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf" -o app/assets/fonts/DejaVuSans.ttf
+          ls -lh app/assets/fonts | tee -a logs/system_info.txt
+
+      - name: Validate buildozer.spec
+        run: |
+          set -euo pipefail
+          test -f buildozer.spec || { echo "buildozer.spec not found"; exit 1; }
+          head -n 5 buildozer.spec
+          python - << 'PY'
+import configparser
+cfg = configparser.ConfigParser()
+cfg.read('buildozer.spec', encoding='utf-8')
+assert 'app' in cfg, "Missing [app] section in buildozer.spec"
+print("buildozer.spec OK: [app] present")
+PY
+
+      - name: Build debug APK (verbose, logged)
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          ( set -x; buildozer -v android debug ) 2>&1 | tee logs/buildozer_build.log
+
+      - name: List build outputs
+        run: |
+          mkdir -p logs
+          ls -la bin | tee -a logs/summary.txt || true
+          echo "Build finished at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" | tee -a logs/summary.txt
+
+      - name: Job summary (quick view)
+        if: always()
+        run: |
+          {
+            echo "## CNC Checklist – CI summary"
+            echo ""
+            echo "**System**: Java $(java -version 2>&1 | head -n1), Python $(python --version 2>&1)"
+            echo "**SDK root**: $ANDROID_HOME"
+            echo "**Outputs**:"
+            ls -la bin || echo "no bin/"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload APK/AAB artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cnc-checklist-apk
+          path: |
+            bin/*.apk
+            bin/*.aab
+          if-no-files-found: warn
+
+      - name: Upload CI logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: |
+            logs/**
+            .buildozer/**/*.log
+            .buildozer/**/build*.txt
+            .buildozer/android/platform/python-for-android/*.log
+          if-no-files-found: warn
