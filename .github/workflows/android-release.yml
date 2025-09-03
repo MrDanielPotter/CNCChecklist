@@ -41,6 +41,12 @@ jobs:
       AUTOCONF_VERSION: "2.71"
       AUTOMAKE_VERSION: "1.16"
       LT_SYS_SYMBOL_USCORE: "no"
+      # Дополнительные переменные для исправления libffi
+      ACLOCAL_PATH: "/usr/share/aclocal"
+      M4PATH: "/usr/share/aclocal"
+      # Переменные для исправления autotools
+      AUTOTOOLS_ACLOCAL: "/usr/share/aclocal"
+      AUTOTOOLS_M4: "/usr/share/aclocal"
       # Используем sdl2 bootstrap для Kivy
       P4A_BOOTSTRAP: "sdl2"
       # Используем стабильную ветку python-for-android
@@ -108,24 +114,25 @@ jobs:
           sudo apt-get install -y \
             git zip unzip \
             libstdc++6 libffi-dev libssl-dev zlib1g-dev \
-            libncurses6 libtinfo6 \
-            build-essential \
-            python3-dev \
-            python3-venv \
-            libbz2-dev libreadline-dev libsqlite3-dev \
-            libncurses5-dev libncursesw5-dev \
-            xz-utils tk-dev libxml2-dev libxmlsec1-dev \
-            liblzma-dev pkg-config autoconf automake \
-            libtool cmake ninja-build ccache \
-            wget curl file \
-            libc6-dev libc6-dev-i386 \
-            lib32stdc++6 lib32z1 \
-            lib32gcc-s1 lib32tinfo6 \
-            libc6-dev-armhf-cross gcc-arm-linux-gnueabihf \
-            g++-arm-linux-gnueabihf \
-            libc6-dev-arm64-cross gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libgdbm-dev uuid-dev
+             libncurses6 libtinfo6 \
+             build-essential \
+             python3-dev \
+             python3-venv \
+             libbz2-dev libreadline-dev libsqlite3-dev \
+             libncurses5-dev libncursesw5-dev \
+             xz-utils tk-dev libxml2-dev libxmlsec1-dev \
+             liblzma-dev pkg-config autoconf automake \
+             libtool cmake ninja-build ccache \
+             wget curl file \
+             libc6-dev libc6-dev-i386 \
+             lib32stdc++6 lib32z1 \
+             lib32gcc-s1 lib32tinfo6 \
+             libc6-dev-armhf-cross gcc-arm-linux-gnueabihf \
+             g++-arm-linux-gnueabihf \
+             libc6-dev-arm64-cross gcc-aarch64-linux-gnu \
+             g++-aarch64-linux-gnu \
+             libgdbm-dev uuid-dev \
+             autotools-dev m4
 
       - name: System info (env, versions, disk)
         run: |
@@ -454,6 +461,25 @@ jobs:
           du -sh "$ANDROID_HOME" || true
           df -h || true
 
+      - name: Fix autotools compatibility for libffi
+        run: |
+           set -euxo pipefail
+           echo "== Fixing autotools compatibility for libffi =="
+           
+           # Создаем символическую ссылку для LT_SYS_SYMBOL_USCORE
+           echo "Creating compatibility symlink for LT_SYS_SYMBOL_USCORE"
+           sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
+           
+           # Устанавливаем переменные окружения для совместимости
+           export LT_SYS_SYMBOL_USCORE=no
+           echo "LT_SYS_SYMBOL_USCORE=no" >> $GITHUB_ENV
+           
+           # Проверяем версии autotools
+           echo "Autotools versions:"
+           autoconf --version | head -1
+           automake --version | head -1
+           libtool --version | head -1
+
       - name: Install buildozer & Python deps
         run: |
           set -euxo pipefail
@@ -779,6 +805,18 @@ jobs:
           # Проверяем, что buildozer может найти все необходимые компоненты после инициализации
           echo "== Re-checking buildozer SDK detection after init ==" | tee -a logs/buildozer_build.log
           buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after init" | tee -a logs/buildozer_build.log
+          
+          # Исправляем проблемы с libffi и autotools перед созданием проекта
+          echo "== Fixing libffi and autotools issues ==" | tee -a logs/buildozer_build.log
+          
+          # Создаем необходимые символические ссылки для autotools
+          sudo mkdir -p /usr/share/aclocal || true
+          sudo ln -sf /usr/share/aclocal/libtool.m4 /usr/share/aclocal/lt_sys_symbol_uscore.m4 || true
+          
+          # Устанавливаем переменные окружения для autotools
+          export LT_SYS_SYMBOL_USCORE=no
+          export ACLOCAL_PATH="/usr/share/aclocal"
+          export M4PATH="/usr/share/aclocal"
           
           # Попробуем принудительно создать Android проект
           echo "== Forcing Android project creation ==" | tee -a logs/buildozer_build.log
