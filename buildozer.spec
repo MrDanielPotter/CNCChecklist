@@ -23,7 +23,7 @@ android.permissions = INTERNET, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USE
 # целевая/минимальная платформа
 android.api = 33
 android.minapi = 33
-android.arch = arm64-v8a
+android.archs = arm64-v8a
 
 # опционально: логи Kivy
 # android.logcat_filters = *:S python:D
@@ -32,7 +32,6 @@ android.arch = arm64-v8a
 # Пути берём из переменных окружения CI
 android.sdk_dir = %(ANDROID_HOME)s
 android.ndk_dir = %(ANDROID_NDK_HOME)s
-android.build_tools = 34.0.0
 log_level = 2
 bin_dir = bin
 
