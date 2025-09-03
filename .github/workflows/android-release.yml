@@ -106,20 +106,35 @@ jobs:
           mkdir -p logs
           exec &> >(tee -a logs/sdkmanager_install.log)
 
-          echo "== Accept licenses =="
-          yes | "$SDKM" --sdk_root="$SDKROOT" --licenses || true
+          echo "== Accept licenses (multiple attempts) =="
+          # Принимаем лицензии с несколькими попытками
+          for i in 1 2 3; do
+            echo "License acceptance attempt $i"
+            echo "y" | "$SDKM" --sdk_root="$SDKROOT" --licenses && break || {
+              echo "WARN: License acceptance attempt $i failed; retrying..."
+              sleep 3
+            }
+          done
+
+          # Проверяем доступные пакеты
+          echo "== Available packages =="
+          "$SDKM" --sdk_root="$SDKROOT" --list | grep -E "(build-tools|platforms|ndk)" | head -20 || true
 
           install_pkg() {
             pkg="$1"
             echo "== Installing: $pkg =="
             for i in 1 2 3; do
-              "$SDKM" --sdk_root="$SDKROOT" "$pkg" && break || {
+              if "$SDKM" --sdk_root="$SDKROOT" --install "$pkg"; then
+                echo "SUCCESS: $pkg installed"
+                break
+              else
                 echo "WARN: attempt $i failed for $pkg; retrying in 5s..."
                 sleep 5
-              }
+              fi
             done
           }
 
+          # Устанавливаем только необходимые пакеты
           install_pkg "platform-tools"
           install_pkg "platforms;$ANDROID_PLATFORM"
           install_pkg "build-tools;$ANDROID_BUILD_TOOLS"
@@ -128,11 +143,18 @@ jobs:
           # Создаем символическую ссылку на NDK
           ln -s "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" "$ANDROID_NDK_HOME" || true
           
-          # Удаляем неиспользуемые версии build-tools
-          if [ -L "$ANDROID_HOME/build-tools/36.1.0-rc1" ]; then rm -f "$ANDROID_HOME/build-tools/36.1.0-rc1"; fi
+          # Удаляем нестабильные версии build-tools если они установились
+          rm -rf "$ANDROID_HOME/build-tools/36.1.0-rc1" || true
+          rm -rf "$ANDROID_HOME/build-tools/36.1.0" || true
 
-          echo "== Verify installed list (head) =="
-          "$SDKM" --sdk_root="$SDKROOT" --list | sed -n '1,200p' || true
+          echo "== Verify installed packages =="
+          ls -la "$ANDROID_HOME/build-tools/" || true
+          ls -la "$ANDROID_HOME/platforms/" || true
+          ls -la "$ANDROID_HOME/ndk/" || true
+          
+          echo "== Check aidl availability =="
+          find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null || echo "aidl not found"
+          
           echo "== Disk usage =="
           du -sh "$ANDROID_HOME" || true
           df -h || true
@@ -146,6 +168,47 @@ jobs:
           # Проверяем версии установленных пакетов
           echo "=== Installed Python packages ===" | tee -a logs/system_info.txt
           pip list | grep -E "(buildozer|kivy|pillow|reportlab)" | tee -a logs/system_info.txt
+
+      - name: Verify Android SDK installation
+        run: |
+          set -euxo pipefail
+          echo "=== Android SDK Verification ===" | tee -a logs/summary.txt
+          
+          # Проверяем наличие build-tools
+          if [ -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ]; then
+            echo "✅ build-tools $ANDROID_BUILD_TOOLS found" | tee -a logs/summary.txt
+            ls -la "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS/" | tee -a logs/summary.txt
+          else
+            echo "❌ build-tools $ANDROID_BUILD_TOOLS not found" | tee -a logs/summary.txt
+            ls -la "$ANDROID_HOME/build-tools/" || true
+            exit 1
+          fi
+          
+          # Проверяем наличие aidl
+          AIDL_PATH=$(find "$ANDROID_HOME" -name "aidl" -type f 2>/dev/null | head -1)
+          if [ -n "$AIDL_PATH" ]; then
+            echo "✅ aidl found at: $AIDL_PATH" | tee -a logs/summary.txt
+            "$AIDL_PATH" --version 2>&1 | tee -a logs/summary.txt || true
+          else
+            echo "❌ aidl not found" | tee -a logs/summary.txt
+            exit 1
+          fi
+          
+          # Проверяем наличие platforms
+          if [ -d "$ANDROID_HOME/platforms/$ANDROID_PLATFORM" ]; then
+            echo "✅ platform $ANDROID_PLATFORM found" | tee -a logs/summary.txt
+          else
+            echo "❌ platform $ANDROID_PLATFORM not found" | tee -a logs/summary.txt
+            exit 1
+          fi
+          
+          # Проверяем наличие NDK
+          if [ -d "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" ]; then
+            echo "✅ NDK $ANDROID_NDK_VERSION found" | tee -a logs/summary.txt
+          else
+            echo "❌ NDK $ANDROID_NDK_VERSION not found" | tee -a logs/summary.txt
+            exit 1
+          fi
 
       - name: Download DejaVuSans.ttf (for Cyrillic PDF)
         run: |
@@ -271,3 +334,5 @@ jobs:
             .buildozer/android/platform/python-for-android/*.log
           if-no-files-found: warn
           retention-days: 7
+
+          
