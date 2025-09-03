@@ -271,17 +271,68 @@ jobs:
           echo "== Installing NDK =="
           cd "$ANDROID_HOME/ndk"
           
-          # Скачиваем NDK
-          echo "Downloading NDK $ANDROID_NDK_VERSION..."
-          curl -sSL "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_VERSION-linux.zip" -o ndk.zip
-          if [ -f "ndk.zip" ]; then
-            unzip -q ndk.zip
-            # Переименовываем папку в правильное имя
-            if [ -d "android-ndk-$ANDROID_NDK_VERSION" ]; then
-              mv "android-ndk-$ANDROID_NDK_VERSION" "$ANDROID_NDK_VERSION"
+          # Пробуем несколько URL для NDK
+          NDK_URLS=(
+            "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_VERSION-linux.zip"
+            "https://dl.google.com/android/repository/android-ndk-r25c-linux.zip"
+            "https://dl.google.com/android/repository/android-ndk-r25b-linux.zip"
+            "https://dl.google.com/android/repository/android-ndk-r25a-linux.zip"
+          )
+          
+          NDK_DOWNLOADED=false
+          for url in "${NDK_URLS[@]}"; do
+            echo "Trying to download NDK from: $url"
+            if curl -sSL "$url" -o ndk.zip; then
+              # Проверяем, что файл скачался и не пустой
+              if [ -f "ndk.zip" ] && [ -s "ndk.zip" ]; then
+                echo "NDK downloaded, size: $(stat -c%s ndk.zip) bytes"
+                
+                # Проверяем, что это валидный zip файл
+                if unzip -t ndk.zip >/dev/null 2>&1; then
+                  echo "Valid NDK zip file, extracting..."
+                  unzip -q ndk.zip
+                  
+                  # Определяем версию и переименовываем папку
+                  if [ -d "android-ndk-$ANDROID_NDK_VERSION" ]; then
+                    mv "android-ndk-$ANDROID_NDK_VERSION" "$ANDROID_NDK_VERSION"
+                    echo "✅ NDK $ANDROID_NDK_VERSION downloaded and extracted"
+                  elif [ -d "android-ndk-r25c" ]; then
+                    mv "android-ndk-r25c" "25.2.9519653"
+                    echo "✅ NDK r25c downloaded and extracted as 25.2.9519653"
+                  elif [ -d "android-ndk-r25b" ]; then
+                    mv "android-ndk-r25b" "25.2.9519653"
+                    echo "✅ NDK r25b downloaded and extracted as 25.2.9519653"
+                  elif [ -d "android-ndk-r25a" ]; then
+                    mv "android-ndk-r25a" "25.2.9519653"
+                    echo "✅ NDK r25a downloaded and extracted as 25.2.9519653"
+                  else
+                    # Ищем любую папку android-ndk-*
+                    NDK_DIR=$(find . -maxdepth 1 -type d -name "android-ndk-*" | head -1)
+                    if [ -n "$NDK_DIR" ]; then
+                      mv "$NDK_DIR" "$ANDROID_NDK_VERSION"
+                      echo "✅ NDK downloaded and extracted as $ANDROID_NDK_VERSION"
+                    fi
+                  fi
+                  
+                  rm -f ndk.zip
+                  NDK_DOWNLOADED=true
+                  break
+                else
+                  echo "Invalid NDK zip file, trying next URL..."
+                  rm -f ndk.zip
+                fi
+              else
+                echo "NDK download failed or empty, trying next URL..."
+                rm -f ndk.zip
+              fi
+            else
+              echo "Failed to download NDK from $url, trying next URL..."
             fi
-            rm -f ndk.zip
-            echo "✅ NDK $ANDROID_NDK_VERSION downloaded and extracted"
+          done
+          
+          if [ "$NDK_DOWNLOADED" = false ]; then
+            echo "❌ Failed to download any NDK version"
+            exit 1
           fi
           
           # Создаем символическую ссылку на NDK
