@@ -459,6 +459,8 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip wheel setuptools cython
           python -m pip install buildozer==1.5.0
+          python -m pip install appdirs
+          python -m pip install python-for-android
           
           # Проверяем версии установленных пакетов
           echo "=== Installed Python packages ===" | tee -a logs/system_info.txt
@@ -751,7 +753,7 @@ jobs:
           
           # Принудительная очистка buildozer перед сборкой
           echo "== Forcing buildozer clean ==" | tee -a logs/buildozer_build.log
-          buildozer android clean 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer clean failed (expected)" | tee -a logs/buildozer_build.log
+          buildozer android clean 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer clean failed (expected - may need dependencies)" | tee -a logs/buildozer_build.log
           
           # Удаляем кеш buildozer для принудительного пересоздания
           echo "== Removing buildozer cache ==" | tee -a logs/buildozer_build.log
@@ -776,7 +778,7 @@ jobs:
           
           # Проверяем, что buildozer может найти все необходимые компоненты после инициализации
           echo "== Re-checking buildozer SDK detection after init ==" | tee -a logs/buildozer_build.log
-          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after init" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after init" | tee -a logs/buildozer_build.log
           
           # Попробуем принудительно создать Android проект
           echo "== Forcing Android project creation ==" | tee -a logs/buildozer_build.log
@@ -792,7 +794,7 @@ jobs:
           
           # Проверяем, что buildozer может найти все необходимые компоненты после создания Android проекта
           echo "== Final buildozer SDK detection check ==" | tee -a logs/buildozer_build.log
-          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after project creation" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
           
           # Попробуем сначала простую команду
           echo "== Attempting buildozer build ==" | tee -a logs/buildozer_build.log
@@ -814,7 +816,7 @@ jobs:
           
           # Проверяем, что buildozer может найти все необходимые компоненты после создания Android проекта
           echo "== Final buildozer SDK detection check ==" | tee -a logs/buildozer_build.log
-          buildozer android status 2>&1 | tee -a logs/buildozer_build.log || echo "buildozer android status failed after project creation" | tee -a logs/buildozer_build.log
+          buildozer android debug --help 2>&1 | head -10 | tee -a logs/buildozer_build.log || echo "buildozer android debug --help failed after project creation" | tee -a logs/buildozer_build.log
           
           # Создаем символические ссылки на Gradle файлы для GitHub Actions
           echo "== Creating symlinks for Gradle files ==" | tee -a logs/buildozer_build.log
