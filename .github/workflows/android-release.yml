@@ -42,6 +42,8 @@ jobs:
       P4A_USE_SYSTEM_LIBFFI: "1"
       # Отключаем компиляцию libffi
       P4A_LIBFFI_SKIP: "1"
+      # Исключаем libffi из рецептов
+      P4A_RECIPE_BLACKLIST: "libffi"
 
     steps:
       - name: Checkout
@@ -527,6 +529,7 @@ jobs:
           LT_SYS_SYMBOL_USCORE: ${{ env.LT_SYS_SYMBOL_USCORE }}
           P4A_USE_SYSTEM_LIBFFI: ${{ env.P4A_USE_SYSTEM_LIBFFI }}
           P4A_LIBFFI_SKIP: ${{ env.P4A_LIBFFI_SKIP }}
+          P4A_RECIPE_BLACKLIST: ${{ env.P4A_RECIPE_BLACKLIST }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -631,6 +634,7 @@ jobs:
           export AUTOMAKE_VERSION=1.16
           export P4A_USE_SYSTEM_LIBFFI=1
           export P4A_LIBFFI_SKIP=1
+          export P4A_RECIPE_BLACKLIST=libffi
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log
