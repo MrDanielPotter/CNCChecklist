@@ -46,6 +46,6 @@ bin_dir = bin
 accept_sdk_license = True
 p4a.branch = master
 # Стабильные версии Android SDK
-android.platform = android-12
+android.platform = android-32
 android.build_tools = 34.0.0
 android.ndk = 25.2.9519653
