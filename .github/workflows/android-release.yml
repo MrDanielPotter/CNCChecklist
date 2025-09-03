@@ -44,6 +44,8 @@ jobs:
       P4A_LIBFFI_SKIP: "1"
       # Исключаем libffi из рецептов
       P4A_RECIPE_BLACKLIST: "libffi"
+      # Используем webview bootstrap
+      P4A_BOOTSTRAP: "webview"
 
     steps:
       - name: Checkout
@@ -530,6 +532,7 @@ jobs:
           P4A_USE_SYSTEM_LIBFFI: ${{ env.P4A_USE_SYSTEM_LIBFFI }}
           P4A_LIBFFI_SKIP: ${{ env.P4A_LIBFFI_SKIP }}
           P4A_RECIPE_BLACKLIST: ${{ env.P4A_RECIPE_BLACKLIST }}
+          P4A_BOOTSTRAP: ${{ env.P4A_BOOTSTRAP }}
         run: |
           set -euo pipefail
           mkdir -p logs
@@ -635,6 +638,7 @@ jobs:
           export P4A_USE_SYSTEM_LIBFFI=1
           export P4A_LIBFFI_SKIP=1
           export P4A_RECIPE_BLACKLIST=libffi
+          export P4A_BOOTSTRAP=webview
           
           # Сборка с детальным логированием
           echo "== Starting buildozer build ==" | tee -a logs/buildozer_build.log

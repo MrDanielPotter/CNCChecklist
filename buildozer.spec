@@ -20,6 +20,9 @@ requirements = python3,kivy==2.3.0,pillow,reportlab,androidstorage4kivy,plyer,op
 # исключаем проблемные рецепты
 android.recipe_blacklist = libffi
 
+# используем webview bootstrap вместо sdl2
+android.bootstrap = webview
+
 # разрешения Android 13+
 android.permissions = INTERNET, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED
 
